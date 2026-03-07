@@ -1,0 +1,16 @@
+{
+  "name": "impact",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev:backend": "bun run --hot packages/backend/src/index.ts",
+    "dev:dashboard": "bun run --cwd packages/dashboard dev",
+    "dev:extension": "bun run --cwd packages/extension dev",
+    "build": "bun run build:shared && bun run build:dashboard && bun run build:extension",
+    "build:shared": "bun run --cwd packages/shared build",
+    "build:dashboard": "bun run --cwd packages/dashboard build",
+    "build:extension": "bun run --cwd packages/extension build",
+    "db:generate": "bun run --cwd packages/backend drizzle-kit generate",
+    "db:migrate": "bun run --cwd packages/backend drizzle-kit migrate"
+  }
+}

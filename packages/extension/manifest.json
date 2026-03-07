@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Impact - Browsing Tracker",
+  "version": "0.1.0",
+  "description": "Locally track your browsing activity and get smart reminders",
+  "permissions": ["tabs", "activeTab", "storage", "alarms", "webNavigation"],
+  "host_permissions": ["http://localhost:7890/*"],
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+  "content_scripts": [{
+    "matches": ["https://*/*", "http://*/*"],
+    "js": ["src/content/index.ts"],
+    "run_at": "document_idle"
+  }],
+  "action": {
+    "default_popup": "src/popup/index.html"
+  },
+  "icons": {}
+}
