@@ -281,6 +281,45 @@ Assistant:`;
 });
 
 // GET /api/snapshots/html?url=... — return cheerio-processed HTML for a URL
+// GET /api/snapshots/debug-rss?url=... — diagnose why RSS feeds may not appear
+app.get("/debug-rss", async (c) => {
+	const url = c.req.query("url");
+	if (!url) return c.json({ error: "url required" }, 400);
+
+	const snap = db
+		.select()
+		.from(schema.pageSnapshots)
+		.where(eq(schema.pageSnapshots.url, url))
+		.orderBy(desc(schema.pageSnapshots.capturedAt))
+		.get();
+
+	if (!snap) return c.json({ hasSnapshot: false, error: "No snapshot found for this URL" });
+	if (!snap.pageHtml) return c.json({ hasSnapshot: true, hasHtml: false, error: "No pageHtml stored — rss-extractor cannot run. Re-capture from the extension." });
+
+	const { rssExtractor } = await import("../plugins/rss-extractor.js");
+	const ctx: PluginContext = { url, domain: snap.domain, pageHtml: snap.pageHtml, pageText: snap.pageText ?? null, extensionData: {} };
+	const state: PluginState = { structuredContent: null, data: {}, pluginResults: [] };
+
+	let error: string | null = null;
+	try {
+		await rssExtractor.run(ctx, state, {});
+	} catch (e) {
+		error = String(e);
+	}
+
+	const feedKeys = Object.keys(state.data).filter(k => k.startsWith("feed_"));
+	return c.json({
+		hasSnapshot: true,
+		hasHtml: true,
+		htmlLength: snap.pageHtml.length,
+		feedsFound: feedKeys.length,
+		feeds: feedKeys.map(k => state.data[k]),
+		currentSnapshotData: JSON.parse(snap.data) as Record<string, unknown>,
+		feedKeysInSnapshot: Object.keys(JSON.parse(snap.data) as Record<string, unknown>).filter(k => k.startsWith("feed_")),
+		error,
+	});
+});
+
 app.get("/html", async (c) => {
 	const url = c.req.query("url");
 	if (!url) return c.json({ error: "url required" }, 400);
