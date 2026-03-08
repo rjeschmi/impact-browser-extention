@@ -1,5 +1,5 @@
 import type { PageVisit, Extraction } from "@impact/shared";
-import { sendVisits, sendExtractions } from "../lib/api.js";
+import { sendVisits, sendExtractions, getSnapshot } from "../lib/api.js";
 
 interface ActiveTab {
 	tabId: number;
@@ -21,8 +21,19 @@ function extractDomain(url: string): string {
 	}
 }
 
+const VISIT_BLOCKLIST = new Set(["localhost", "127.0.0.1"]);
+
 function isTrackableUrl(url: string): boolean {
-	return url.startsWith("http://") || url.startsWith("https://");
+	if (!url.startsWith("http://") && !url.startsWith("https://")) return false;
+	try {
+		const { hostname, port } = new URL(url);
+		// Block localhost and any local port (e.g. localhost:7890 dashboard)
+		if (VISIT_BLOCKLIST.has(hostname)) return false;
+		if (hostname === "localhost" || hostname.endsWith(".local")) return false;
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 function finalizeActiveTab() {
@@ -85,6 +96,68 @@ async function restorePendingVisits() {
 	}
 }
 
+// --- Icon dot indicator ---
+
+const iconCache = new Map<string, ImageBitmap>();
+
+async function getIconBitmap(size: number): Promise<ImageBitmap> {
+	const key = String(size);
+	if (iconCache.has(key)) return iconCache.get(key)!;
+	const res = await fetch(chrome.runtime.getURL(`icons/icon${size}.png`));
+	const blob = await res.blob();
+	const bitmap = await createImageBitmap(blob);
+	iconCache.set(key, bitmap);
+	return bitmap;
+}
+
+async function setIconDot(tabId: number, color: string | null) {
+	const sizes = [16, 32, 48, 128];
+	const imageData: Record<number, ImageData> = {};
+
+	for (const size of sizes) {
+		const canvas = new OffscreenCanvas(size, size);
+		const ctx = canvas.getContext("2d")!;
+		ctx.drawImage(await getIconBitmap(size), 0, 0, size, size);
+
+		if (color) {
+			const r = Math.max(2, Math.round(size * 0.16));
+			const x = size - r - 1;
+			const y = size - r - 1;
+			// Dark ring to separate from icon background
+			ctx.beginPath();
+			ctx.arc(x, y, r + 1, 0, Math.PI * 2);
+			ctx.fillStyle = "#0f1829";
+			ctx.fill();
+			// Coloured dot
+			ctx.beginPath();
+			ctx.arc(x, y, r, 0, Math.PI * 2);
+			ctx.fillStyle = color;
+			ctx.fill();
+		}
+
+		imageData[size] = ctx.getImageData(0, 0, size, size);
+	}
+
+	chrome.action.setIcon({ imageData, tabId });
+	chrome.action.setBadgeText({ text: "", tabId });
+}
+
+async function updateBadge(tabId: number, domain: string) {
+	if (!domain || !isTrackableUrl(`https://${domain}`)) {
+		setIconDot(tabId, null);
+		return;
+	}
+	try {
+		const tab = await chrome.tabs.get(tabId).catch(() => null);
+		if (!tab?.url) { setIconDot(tabId, null); return; }
+		const snapshot = await getSnapshot(tab.url);
+		setIconDot(tabId, snapshot.committed ? "#51cf66" : "#ff6b6b");
+	} catch {
+		setIconDot(tabId, null);
+	}
+}
+
+
 // --- Event Listeners ---
 
 // Tab activated (user switches tabs)
@@ -92,6 +165,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 	const tab = await chrome.tabs.get(activeInfo.tabId);
 	if (tab.url && tab.title) {
 		startTracking(activeInfo.tabId, tab.url, tab.title);
+		updateBadge(activeInfo.tabId, extractDomain(tab.url));
 	}
 });
 
@@ -104,6 +178,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 		tab.title
 	) {
 		startTracking(tabId, tab.url, tab.title);
+		updateBadge(tabId, extractDomain(tab.url));
 	}
 });
 
@@ -147,6 +222,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 async function handleExtractions(extractions: Extraction[]) {
 	if (isPaused || extractions.length === 0) return;
 	await sendExtractions(extractions);
+	// Refresh badge now that we have new data
+	const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+	if (tab?.id && tab.url) updateBadge(tab.id, extractDomain(tab.url));
 }
 
 // Listen for pause/resume from popup

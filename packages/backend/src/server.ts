@@ -8,6 +8,8 @@ import extractions from "./api/extractions.js";
 import suggestions from "./api/suggestions.js";
 import reminders from "./api/reminders.js";
 import settings from "./api/settings.js";
+import snapshots from "./api/snapshots.js";
+import promptConfigs from "./api/prompt-configs.js";
 
 const DASHBOARD_DIR = join(dirname(import.meta.dir), "..", "dashboard", "dist");
 
@@ -32,6 +34,8 @@ app.route("/api/extractions", extractions);
 app.route("/api/suggestions", suggestions);
 app.route("/api/reminders", reminders);
 app.route("/api/settings", settings);
+app.route("/api/snapshots", snapshots);
+app.route("/api/prompt-configs", promptConfigs);
 
 const MIME: Record<string, string> = {
 	".html": "text/html; charset=utf-8",

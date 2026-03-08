@@ -1,13 +1,18 @@
 import { useState, useEffect } from "preact/hooks";
 import { getSettings, getBlocklist, addBlocklistDomain, removeBlocklistDomain, purgeData, getExportUrl } from "../lib/api.js";
+import { PromptConfigManager } from "./PromptConfigManager.js";
 
 type Stats = { visits: number; extractions: number; suggestions: number; reminders: number; llmEnabled: boolean; ollamaModel: string };
 
+const card = { background: "#1e2d50", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.07)", padding: "16px", marginBottom: 12 };
+const input = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", color: "#e2e8f0", fontSize: 14, padding: "8px 12px", outline: "none" };
+const label = { fontSize: 11, fontWeight: 700 as const, color: "rgba(255,255,255,0.35)", textTransform: "uppercase" as const, letterSpacing: "0.06em", display: "block", marginBottom: 10 };
+
 export function Settings() {
-	const [stats, setStats] = useState<Stats | null>(null);
+	const [stats, setStats]       = useState<Stats | null>(null);
 	const [blocklist, setBlocklist] = useState<string[]>([]);
 	const [newDomain, setNewDomain] = useState("");
-	const [purging, setPurging] = useState(false);
+	const [purging, setPurging]   = useState(false);
 	const [purgeDays, setPurgeDays] = useState(30);
 	const [purgeResult, setPurgeResult] = useState<string | null>(null);
 
@@ -37,130 +42,95 @@ export function Settings() {
 			const result = await purgeData(purgeDays);
 			setPurgeResult(`Deleted ${result.deleted.visits} visits and ${result.deleted.extractions} extractions.`);
 			getSettings().then(setStats).catch(() => {});
-		} finally {
-			setPurging(false);
-		}
+		} finally { setPurging(false); }
 	}
 
-	const sectionStyle = {
-		background: "white", borderRadius: 10, border: "1px solid #e9ecef",
-		padding: "16px", marginBottom: 16,
-	};
-	const labelStyle = { fontSize: 13, fontWeight: 600 as const, color: "#868e96", textTransform: "uppercase" as const, letterSpacing: "0.05em", display: "block", marginBottom: 10 };
-	const inputStyle = { padding: "8px 12px", border: "1px solid #dee2e6", borderRadius: 8, fontSize: 14, outline: "none" };
+	const statItems = stats ? [
+		["Visits", stats.visits], ["Extractions", stats.extractions],
+		["Suggestions", stats.suggestions], ["Reminders", stats.reminders],
+	] : [];
 
 	return (
 		<div>
-			{/* Database stats */}
-			<div style={sectionStyle}>
-				<span style={labelStyle}>Database</span>
+			{/* Stats */}
+			<div style={card}>
+				<span style={label}>Database</span>
 				{stats ? (
 					<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-						{[
-							["Visits", stats.visits],
-							["Extractions", stats.extractions],
-							["Suggestions", stats.suggestions],
-							["Reminders", stats.reminders],
-						].map(([label, count]) => (
-							<div key={label} style={{ padding: "10px 12px", background: "#f8f9fa", borderRadius: 8 }}>
-								<div style={{ fontSize: 20, fontWeight: 700 }}>{count}</div>
-								<div style={{ fontSize: 12, color: "#868e96" }}>{label}</div>
+						{statItems.map(([l, n]) => (
+							<div key={l} style={{ padding: "10px 12px", background: "rgba(255,255,255,0.05)", borderRadius: 8 }}>
+								<div style={{ fontSize: 22, fontWeight: 700, color: "#74c0fc" }}>{n}</div>
+								<div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{l}</div>
 							</div>
 						))}
 					</div>
-				) : (
-					<p style={{ color: "#868e96", fontSize: 14 }}>Loading...</p>
+				) : <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 13 }}>Loading...</p>}
+			</div>
+
+			{/* LLM */}
+			<div style={card}>
+				<span style={label}>AI Analysis (Ollama)</span>
+				{stats && (
+					<>
+						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+							<div style={{ width: 7, height: 7, borderRadius: "50%", background: stats.llmEnabled ? "#51cf66" : "rgba(255,255,255,0.2)" }} />
+							<span style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>
+								{stats.llmEnabled ? `Enabled — ${stats.ollamaModel}` : "Disabled"}
+							</span>
+						</div>
+						<p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 8 }}>
+							Enable with <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 5px", borderRadius: 3, color: "#74c0fc" }}>IMPACT_LLM=1 bun run dev:backend</code>
+						</p>
+					</>
 				)}
 			</div>
 
-			{/* LLM status */}
-			<div style={sectionStyle}>
-				<span style={labelStyle}>AI Analysis (Ollama)</span>
-				{stats ? (
-					<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-						<div style={{
-							width: 8, height: 8, borderRadius: "50%",
-							background: stats.llmEnabled ? "#51cf66" : "#adb5bd",
-						}} />
-						<span style={{ fontSize: 14 }}>
-							{stats.llmEnabled
-								? `Enabled — using ${stats.ollamaModel}`
-								: "Disabled — set IMPACT_LLM=1 to enable"}
-						</span>
-					</div>
-				) : null}
-				<p style={{ fontSize: 12, color: "#adb5bd", marginTop: 8 }}>
-					Restart with <code style={{ background: "#f1f3f5", padding: "1px 4px", borderRadius: 3 }}>IMPACT_LLM=1 bun run dev:backend</code> to enable.
-					Requires <a href="https://ollama.com" target="_blank" rel="noopener noreferrer" style={{ color: "#1c7ed6" }}>Ollama</a> running locally.
-				</p>
-			</div>
-
-			{/* Domain blocklist */}
-			<div style={sectionStyle}>
-				<span style={labelStyle}>Domain Blocklist</span>
-				<p style={{ fontSize: 13, color: "#868e96", marginBottom: 12 }}>
-					These domains are skipped during tracking and analysis.
-				</p>
-				<form onSubmit={handleAddDomain} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-					<input
-						placeholder="example.com"
-						value={newDomain}
-						onInput={e => setNewDomain((e.target as HTMLInputElement).value)}
-						style={{ ...inputStyle, flex: 1 }}
-					/>
-					<button type="submit" style={{ padding: "8px 16px", background: "#228be6", color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>
-						Add
-					</button>
+			{/* Blocklist */}
+			<div style={card}>
+				<span style={label}>Domain Blocklist</span>
+				<p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 12 }}>Domains skipped during tracking and analysis.</p>
+				<form onSubmit={handleAddDomain} style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+					<input placeholder="example.com" value={newDomain} onInput={e => setNewDomain((e.target as HTMLInputElement).value)} style={{ ...input, flex: 1 }} />
+					<button type="submit" style={{ padding: "8px 14px", background: "#228be6", color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Add</button>
 				</form>
 				<div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-					{blocklist.map(domain => (
-						<div key={domain} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "#f8f9fa", borderRadius: 6 }}>
-							<span style={{ fontSize: 14 }}>{domain}</span>
-							<button onClick={() => handleRemoveDomain(domain)} style={{ padding: "2px 8px", background: "none", border: "1px solid #dee2e6", borderRadius: 4, cursor: "pointer", fontSize: 12, color: "#868e96" }}>
-								Remove
-							</button>
+					{blocklist.map(d => (
+						<div key={d} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "rgba(255,255,255,0.05)", borderRadius: 6 }}>
+							<span style={{ fontSize: 13, color: "#e2e8f0" }}>{d}</span>
+							<button onClick={() => handleRemoveDomain(d)} style={{ padding: "2px 8px", background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, cursor: "pointer", fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Remove</button>
 						</div>
 					))}
 				</div>
 			</div>
 
+			{/* Extraction Prompts */}
+			<div style={card}>
+				<span style={label}>Extraction Prompts</span>
+				<PromptConfigManager />
+			</div>
+
 			{/* Export */}
-			<div style={sectionStyle}>
-				<span style={labelStyle}>Export Data</span>
-				<p style={{ fontSize: 13, color: "#868e96", marginBottom: 12 }}>
-					Download all your data as JSON.
-				</p>
-				<a href={getExportUrl()} download style={{
-					display: "inline-block", padding: "8px 16px", background: "#e9ecef",
-					color: "#495057", borderRadius: 8, fontSize: 14, textDecoration: "none",
-				}}>
+			<div style={card}>
+				<span style={label}>Export Data</span>
+				<a href={getExportUrl()} download style={{ display: "inline-block", padding: "8px 16px", background: "rgba(255,255,255,0.08)", color: "#e2e8f0", borderRadius: 8, fontSize: 13, textDecoration: "none", border: "1px solid rgba(255,255,255,0.1)" }}>
 					Download export.json
 				</a>
 			</div>
 
 			{/* Purge */}
-			<div style={{ ...sectionStyle, borderColor: "#ffc9c9" }}>
-				<span style={{ ...labelStyle, color: "#ff6b6b" }}>Danger Zone</span>
-				<p style={{ fontSize: 13, color: "#868e96", marginBottom: 12 }}>
-					Permanently delete old visits and extractions.
-				</p>
+			<div style={{ ...card, border: "1px solid rgba(255,107,107,0.2)" }}>
+				<span style={{ ...label, color: "rgba(255,107,107,0.6)" }}>Danger Zone</span>
 				<div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
-					<span style={{ fontSize: 14 }}>Delete data older than</span>
-					<select
-						value={purgeDays}
-						onChange={e => setPurgeDays(Number((e.target as HTMLSelectElement).value))}
-						style={{ ...inputStyle, padding: "6px 10px" }}
-					>
-						{[7, 14, 30, 60, 90].map(d => <option key={d} value={d}>{d} days</option>)}
+					<span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>Delete data older than</span>
+					<select value={purgeDays} onChange={e => setPurgeDays(Number((e.target as HTMLSelectElement).value))}
+						style={{ ...input, padding: "6px 10px" }}>
+						{[7,14,30,60,90].map(d => <option key={d} value={d}>{d} days</option>)}
 					</select>
-					<button onClick={handlePurge} disabled={purging} style={{
-						padding: "8px 16px", background: "#fff0f0", color: "#ff6b6b",
-						border: "1px solid #ffc9c9", borderRadius: 8, cursor: "pointer", fontSize: 14,
-					}}>
+					<button onClick={handlePurge} disabled={purging} style={{ padding: "8px 14px", background: "rgba(255,107,107,0.1)", color: "#ff8f8f", border: "1px solid rgba(255,107,107,0.25)", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
 						{purging ? "Purging..." : "Purge"}
 					</button>
 				</div>
-				{purgeResult && <p style={{ fontSize: 13, color: "#51cf66", marginTop: 8 }}>{purgeResult}</p>}
+				{purgeResult && <p style={{ fontSize: 12, color: "#51cf66", marginTop: 8 }}>{purgeResult}</p>}
 			</div>
 		</div>
 	);

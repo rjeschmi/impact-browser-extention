@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db, schema } from "../db/client.js";
 import { PageVisitBatchSchema, PageVisitSchema } from "@impact/shared";
-import { desc, eq, gte, sql } from "drizzle-orm";
+import { desc, eq, gte, sql, and, notInArray } from "drizzle-orm";
 
 const app = new Hono();
 
@@ -63,11 +63,42 @@ app.get("/", async (c) => {
 	return c.json({ visits, count: visits.length });
 });
 
+app.get("/domain-summary", async (c) => {
+	const domain = c.req.query("domain");
+	if (!domain) return c.json({ error: "domain required" }, 400);
+
+	const visitCount = db
+		.select({ count: sql<number>`count(*)` })
+		.from(schema.pageVisits)
+		.where(eq(schema.pageVisits.domain, domain))
+		.get();
+
+	const extractionCount = db
+		.select({ count: sql<number>`count(*)` })
+		.from(schema.extractions)
+		.where(sql`${schema.extractions.url} LIKE ${"%" + domain + "%"}`)
+		.get();
+
+	return c.json({
+		domain,
+		visits: visitCount?.count ?? 0,
+		extractions: extractionCount?.count ?? 0,
+	});
+});
+
+// Domains that should never appear in stats
+const STATS_BLOCKLIST = ["localhost", "127.0.0.1", ""];
+
 app.get("/stats", async (c) => {
 	const since = c.req.query("since");
 	const sinceTs = since
 		? Number(since)
 		: Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+	const baseWhere = and(
+		gte(schema.pageVisits.visitedAt, sinceTs),
+		notInArray(schema.pageVisits.domain, STATS_BLOCKLIST),
+	);
 
 	const topDomains = db
 		.select({
@@ -78,7 +109,7 @@ app.get("/stats", async (c) => {
 			),
 		})
 		.from(schema.pageVisits)
-		.where(gte(schema.pageVisits.visitedAt, sinceTs))
+		.where(baseWhere)
 		.groupBy(schema.pageVisits.domain)
 		.orderBy(sql`visit_count DESC`)
 		.limit(20)
@@ -87,7 +118,7 @@ app.get("/stats", async (c) => {
 	const totalVisits = db
 		.select({ count: sql<number>`count(*)` })
 		.from(schema.pageVisits)
-		.where(gte(schema.pageVisits.visitedAt, sinceTs))
+		.where(baseWhere)
 		.get();
 
 	return c.json({

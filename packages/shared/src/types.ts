@@ -19,6 +19,15 @@ export interface StoredPageVisit extends PageVisit {
 	id: number;
 }
 
+// --- Extraction Extensions ---
+
+export interface ExtractionContext {
+	url: string;
+	now: number;
+}
+
+export type ExtractFn = (ctx: ExtractionContext) => Extraction[];
+
 // --- Extractions ---
 
 export const ExtractionKind = z.enum([
@@ -46,6 +55,7 @@ export type Extraction = z.infer<typeof ExtractionSchema>;
 
 export interface StoredExtraction extends Extraction {
 	id: number;
+	isPinned: boolean;
 }
 
 // --- Suggestions ---

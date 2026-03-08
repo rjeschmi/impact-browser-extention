@@ -9,8 +9,13 @@
     "build": "bun run build:shared && bun run build:dashboard && bun run build:extension",
     "build:shared": "bun run --cwd packages/shared build",
     "build:dashboard": "bun run --cwd packages/dashboard build",
-    "build:extension": "bun run --cwd packages/extension build",
+    "build:extension": "bun run scripts/generate-icons.ts && bun run --cwd packages/extension build",
+    "generate:icons": "bun run scripts/generate-icons.ts",
     "db:generate": "bun run --cwd packages/backend drizzle-kit generate",
     "db:migrate": "bun run --cwd packages/backend drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0"
   }
 }

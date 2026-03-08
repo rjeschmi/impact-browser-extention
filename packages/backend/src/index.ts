@@ -28,8 +28,11 @@ db.run(sql`CREATE TABLE IF NOT EXISTS extractions (
 	value TEXT NOT NULL,
 	context TEXT,
 	metadata TEXT,
-	extracted_at INTEGER NOT NULL
+	extracted_at INTEGER NOT NULL,
+	is_pinned INTEGER NOT NULL DEFAULT 0
 )`);
+// Migrate existing DBs that predate is_pinned
+try { db.run(sql`ALTER TABLE extractions ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0`); } catch {}
 db.run(
 	sql`CREATE INDEX IF NOT EXISTS idx_extractions_url_kind ON extractions(url, kind)`,
 );
@@ -62,6 +65,29 @@ db.run(sql`CREATE TABLE IF NOT EXISTS reminders (
 db.run(
 	sql`CREATE INDEX IF NOT EXISTS idx_reminders_status_remind_at ON reminders(status, remind_at)`,
 );
+
+db.run(sql`CREATE TABLE IF NOT EXISTS page_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  url TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  version TEXT NOT NULL,
+  data TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  captured_at INTEGER NOT NULL,
+  committed_at INTEGER
+)`);
+db.run(sql`CREATE INDEX IF NOT EXISTS idx_snapshots_url_status ON page_snapshots(url, status)`);
+db.run(sql`CREATE INDEX IF NOT EXISTS idx_snapshots_domain ON page_snapshots(domain)`);
+try { db.run(sql`ALTER TABLE page_snapshots ADD COLUMN embedding TEXT`); } catch {}
+try { db.run(sql`ALTER TABLE page_snapshots ADD COLUMN page_text TEXT`); } catch {}
+
+db.run(sql`CREATE TABLE IF NOT EXISTS prompt_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  url_pattern TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+)`);
 
 console.log(`Impact backend starting on http://localhost:${BACKEND_PORT}`);
 startScheduler();

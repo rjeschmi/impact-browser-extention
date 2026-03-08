@@ -7,75 +7,188 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 300px;
-      padding: 16px;
+      width: 280px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       font-size: 14px;
-      color: #1a1a2e;
-      background: #f8f9fa;
+      background: #16213e;
+      color: white;
     }
-    h1 {
-      font-size: 18px;
-      margin-bottom: 12px;
-      color: #16213e;
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
     }
-    .status {
+    .logo {
+      width: 28px; height: 28px; flex-shrink: 0;
+      border-radius: 6px; overflow: hidden;
+    }
+    .logo svg { display: block; }
+    .brand { font-size: 16px; font-weight: 800; letter-spacing: 0.08em; }
+    .brand-sub { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 1px; }
+
+    .status-row {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 12px;
-      padding: 8px 12px;
-      background: white;
-      border-radius: 8px;
-      border: 1px solid #e9ecef;
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #51cf66;
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #51cf66; flex-shrink: 0;
     }
-    .status-dot.paused { background: #ff922b; }
-    .status-dot.offline { background: #ff6b6b; }
-    .info {
-      padding: 8px 12px;
-      background: white;
-      border-radius: 8px;
-      border: 1px solid #e9ecef;
-      margin-bottom: 12px;
+    .dot.paused { background: #ff922b; }
+    .dot.offline { background: #ff6b6b; }
+    .status-label { font-size: 13px; color: rgba(255,255,255,0.7); }
+
+    .site-section {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .site-domain {
       font-size: 13px;
-      color: #495057;
-    }
-    button {
-      width: 100%;
-      padding: 10px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      cursor: pointer;
-      margin-bottom: 8px;
-    }
-    .btn-toggle {
-      background: #e9ecef;
-      color: #495057;
-    }
-    .btn-toggle:hover { background: #dee2e6; }
-    .btn-dashboard {
-      background: #228be6;
+      font-weight: 600;
       color: white;
+      margin-bottom: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    .btn-dashboard:hover { background: #1c7ed6; }
+    .site-meta {
+      font-size: 12px;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 10px;
+    }
+    .block-btn {
+      width: 100%;
+      padding: 8px;
+      border-radius: 7px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.07);
+      color: rgba(255,255,255,0.8);
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+      text-align: center;
+    }
+    .block-btn:hover { background: rgba(255,255,255,0.12); }
+    .block-btn.blocked {
+      border-color: rgba(255,107,107,0.4);
+      background: rgba(255,107,107,0.12);
+      color: #ff8f8f;
+    }
+    .block-btn.blocked:hover { background: rgba(255,107,107,0.2); }
+    .blocked-badge {
+      display: inline-block;
+      background: rgba(255,107,107,0.2);
+      color: #ff8f8f;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    .actions {
+      padding: 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .btn {
+      width: 100%;
+      padding: 9px;
+      border: none;
+      border-radius: 7px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 500;
+      text-align: center;
+    }
+    .btn-primary { background: #228be6; color: white; }
+    .btn-primary:hover { background: #1c7ed6; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.13); }
+
+    .extractions-section {
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .ext-group { margin-bottom: 7px; }
+    .ext-group:last-child { margin-bottom: 0; }
+    .ext-kind {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.3); text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .ext-chips { display: flex; flex-wrap: wrap; gap: 3px; }
+    .ext-chip {
+      font-size: 11px; padding: 2px 7px; border-radius: 4px;
+      max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ext-chip-price    { background: rgba(81,207,102,0.15); color: #51cf66; }
+    .ext-chip-deadline { background: rgba(255,146,43,0.15); color: #ff922b; }
+    .ext-chip-date     { background: rgba(116,192,252,0.15); color: #74c0fc; }
+    .ext-chip-todo     { background: rgba(255,212,59,0.12); color: #ffd43b; }
+    .ext-chip-keyword  { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.5); }
+    .ext-chip.pinned   { outline: 1px solid rgba(255,212,59,0.5); }
+    .chip-row { display: inline-flex; align-items: center; gap: 2px; }
+    .pin-btn {
+      background: none; border: none; cursor: pointer; padding: 0 1px;
+      font-size: 11px; opacity: 0.2; line-height: 1; flex-shrink: 0;
+    }
+    .pin-btn:hover { opacity: 0.8; }
+    .pinned + .pin-btn, .ext-chip.pinned ~ .pin-btn { opacity: 1; }
   </style>
 </head>
 <body>
-  <h1>Impact</h1>
-  <div class="status">
-    <div class="status-dot" id="statusDot"></div>
-    <span id="statusText">Connecting...</span>
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:5px;flex:1">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="26" height="26" rx="5" fill="#16213e"/>
+        <rect x="5" y="5" width="16" height="3" fill="#228be6"/>
+        <rect x="5" y="18" width="16" height="3" fill="#228be6"/>
+        <rect x="10" y="5" width="6" height="16" fill="white"/>
+      </svg>
+      <span class="brand">MPACT</span>
+    </div>
+    <div style="text-align:right">
+      <div class="brand-sub" id="statusLabel">Connecting...</div>
+    </div>
+    <div class="dot" id="statusDot" style="margin-left:8px"></div>
   </div>
-  <div class="info" id="info">Loading...</div>
-  <button class="btn-toggle" id="toggleBtn">Pause Tracking</button>
-  <button class="btn-dashboard" id="dashboardBtn">Open Dashboard</button>
+
+  <div class="site-section">
+    <div class="site-domain" id="siteDomain">—</div>
+    <div class="site-meta" id="siteMeta">Loading site data...</div>
+    <button class="block-btn" id="blockBtn">Block this site</button>
+    <button class="block-btn" id="showDiffBtn" style="display:none;margin-top:6px;border-color:rgba(255,212,59,0.3);color:#ffd43b">
+      Show differences
+    </button>
+    <div id="promptSection" style="display:none;margin-top:8px">
+      <textarea id="promptInput" placeholder="Ask the AI about this page..." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:7px;color:#e2e8f0;font-size:12px;padding:8px;resize:none;outline:none;font-family:inherit" rows="3"></textarea>
+      <button class="btn btn-primary" id="promptSubmitBtn" style="width:100%;margin-top:4px;padding:7px;font-size:12px">Ask AI</button>
+    </div>
+    <button class="block-btn" id="promptBtn" style="display:none;margin-top:6px;border-color:rgba(116,192,252,0.3);color:#74c0fc">
+      Ask AI about this page
+    </button>
+  </div>
+
+  <div class="extractions-section" id="extractionsSection" style="display:none"></div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="dashboardBtn">Open Dashboard</button>
+    <button class="btn btn-secondary" id="toggleBtn">Pause Tracking</button>
+  </div>
+
   <script type="module" src="popup.ts"></script>
 </body>
 </html>

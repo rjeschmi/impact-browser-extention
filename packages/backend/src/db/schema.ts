@@ -25,6 +25,7 @@ export const extractions = sqliteTable(
 		context: text("context"),
 		metadata: text("metadata"), // JSON
 		extractedAt: integer("extracted_at").notNull(),
+		isPinned: integer("is_pinned", { mode: "boolean" }).notNull().default(false),
 	},
 	(table) => [index("idx_extractions_url_kind").on(table.url, table.kind)],
 );
@@ -62,4 +63,35 @@ export const reminders = sqliteTable(
 	(table) => [
 		index("idx_reminders_status_remind_at").on(table.status, table.remindAt),
 	],
+);
+
+export const pageSnapshots = sqliteTable(
+	"page_snapshots",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		url: text("url").notNull(),
+		domain: text("domain").notNull(),
+		version: text("version").notNull(), // YYYY.MM.DD.NN
+		data: text("data").notNull(), // JSON
+		pageText: text("page_text"), // raw page content used for LLM
+		status: text("status").notNull().default("pending"), // "pending" | "committed"
+		capturedAt: integer("captured_at").notNull(),
+		committedAt: integer("committed_at"),
+		embedding: text("embedding"), // JSON float array
+	},
+	(table) => [
+		index("idx_snapshots_url_status").on(table.url, table.status),
+		index("idx_snapshots_domain").on(table.domain),
+	],
+);
+
+export const promptConfigs = sqliteTable(
+	"prompt_configs",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		urlPattern: text("url_pattern").notNull(), // glob pattern, e.g. "https://example.com/*"
+		prompt: text("prompt").notNull(),          // template with {url} and {pageText} placeholders
+		createdAt: integer("created_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
 );

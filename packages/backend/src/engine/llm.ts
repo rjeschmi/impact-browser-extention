@@ -2,26 +2,7 @@ import type { Analyzer } from "./index.js";
 import { desc, gte, sql } from "drizzle-orm";
 import { schema } from "../db/client.js";
 import type { Suggestion } from "@impact/shared";
-
-const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "llama3.2";
-
-async function callOllama(prompt: string): Promise<string> {
-	const res = await fetch(`${OLLAMA_URL}/api/generate`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			model: OLLAMA_MODEL,
-			prompt,
-			stream: false,
-			options: { temperature: 0.3, num_predict: 512 },
-		}),
-		signal: AbortSignal.timeout(30_000),
-	});
-	if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
-	const data = await res.json() as { response: string };
-	return data.response;
-}
+import { callOllama } from "../services/ollama.js";
 
 export const llmAnalyzer: Analyzer = {
 	name: "llm",
