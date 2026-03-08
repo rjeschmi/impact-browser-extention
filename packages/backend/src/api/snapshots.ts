@@ -22,13 +22,21 @@ const SnapshotSubmitSchema = z.object({
 
 function generateVersion(url: string): string {
 	const today = new Date().toISOString().slice(0, 10).replace(/-/g, ".");
-	const todayCount = db
-		.select({ count: sql<number>`count(*)` })
+	const existing = db
+		.select({ version: schema.pageSnapshots.version })
 		.from(schema.pageSnapshots)
 		.where(and(eq(schema.pageSnapshots.url, url), like(schema.pageSnapshots.version, `${today}.%`)))
-		.get();
-	const seq = String((todayCount?.count ?? 0) + 1).padStart(2, "0");
-	return `${today}.${seq}`;
+		.all();
+
+	let maxSeq = 0;
+	for (const row of existing) {
+		const parts = row.version.split(".");
+		const seq = Number(parts[parts.length - 1]);
+		if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+	}
+
+	const nextSeq = String(maxSeq + 1).padStart(2, "0");
+	return `${today}.${nextSeq}`;
 }
 
 function dataChanged(committedData: string, newData: Record<string, unknown>): boolean {
@@ -364,6 +372,30 @@ app.post("/", async (c) => {
 	flushPluginLogs(pending.id, url, pipelineResult.pluginResults);
 
 	return c.json({ changed: true, pendingId: pending.id, version, committedVersion: committed.version }, 201);
+});
+
+// GET /api/snapshots/list?domain=... or ?url=... — list snapshots
+app.get("/list", async (c) => {
+	const domain = c.req.query("domain");
+	const url = c.req.query("url");
+	const limit = Number(c.req.query("limit") ?? "50");
+
+	let query = db.select().from(schema.pageSnapshots).$dynamic();
+
+	if (url) {
+		query = query.where(eq(schema.pageSnapshots.url, url));
+	} else if (domain) {
+		query = query.where(eq(schema.pageSnapshots.domain, domain));
+	} else {
+		return c.json({ error: "domain or url required" }, 400);
+	}
+
+	const snapshots = query
+		.orderBy(desc(schema.pageSnapshots.capturedAt))
+		.limit(limit)
+		.all();
+
+	return c.json({ snapshots });
 });
 
 // GET /api/snapshots?url=... — get current state for a URL

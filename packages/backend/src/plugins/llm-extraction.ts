@@ -16,7 +16,7 @@ export function cleanPageText(raw: string, maxChars = 32000): string {
 	return raw
 		.split("\n")
 		.map((l) => l.trim())
-		.filter((l) => l.length > 20)
+		.filter((l) => l.length > 5)
 		.join("\n")
 		.replace(/\n{3,}/g, "\n\n")
 		.slice(0, maxChars);
@@ -68,15 +68,26 @@ export const llmExtraction: Plugin = {
 		if (!slidingWindow) {
 			const truncated = cleanedContent.slice(0, chunkSize);
 			const prompt = promptTemplate.replace("{url}", ctx.url).replace("{pageText}", truncated);
-			const extracted = await callOllamaJson(prompt);
-			Object.assign(state.data, extracted);
-			state.data.promptUsed = promptTemplate;
-			if (debug) {
-				state.debugLog = {
-					contentLength: cleanedContent.length,
-					promptSent: prompt,
-					rawResult: extracted,
-				};
+			try {
+				const extracted = await callOllamaJson(prompt);
+				Object.assign(state.data, extracted);
+				state.data.promptUsed = promptTemplate;
+				if (debug) {
+					state.debugLog = {
+						contentLength: cleanedContent.length,
+						promptSent: prompt,
+						rawResult: extracted,
+					};
+				}
+			} catch (e) {
+				if (debug) {
+					state.debugLog = {
+						contentLength: cleanedContent.length,
+						promptSent: prompt,
+						error: String(e),
+					};
+				}
+				throw e;
 			}
 			return;
 		}

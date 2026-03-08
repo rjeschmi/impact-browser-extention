@@ -130,3 +130,12 @@ export const pluginLogs = sqliteTable(
 		index("idx_plugin_logs_plugin").on(table.pluginName),
 	],
 );
+
+export const appSettings = sqliteTable(
+	"app_settings",
+	{
+		key: text("key").primaryKey(),
+		value: text("value").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	}
+);

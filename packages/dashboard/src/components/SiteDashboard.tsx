@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
-import { getVisits, getExtractions, patchExtraction, askSnapshot } from "../lib/api.js";
+import { getVisits, getExtractions, patchExtraction, askSnapshot, getSnapshots } from "../lib/api.js";
 import { formatDuration, relativeTime, getFavicon } from "../lib/format.js";
 import type { StoredExtraction, StoredPageVisit } from "@impact/shared";
 
 const card = { background: "#1e2d50", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.07)", padding: "18px 20px" };
 const sectionTitle = { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" as const, marginBottom: 10 };
+
+interface SnapshotInfo { id: number; url: string; domain: string; version: string; status: string; capturedAt: number; committedAt: number | null }
 
 interface PriceMeta { price?: number; currency?: string; name?: string; availability?: string; source?: string }
 interface DeadlineMeta { iso?: string }
@@ -132,15 +134,18 @@ function PageChat({ url, initialPrompt }: { url: string; initialPrompt?: string 
 export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; url?: string; initialPrompt?: string }) {
 	const [visits, setVisits] = useState<StoredPageVisit[]>([]);
 	const [extractions, setExtractions] = useState<StoredExtraction[]>([]);
+	const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
 	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
 		Promise.all([
 			getVisits({ domain, limit: "200" }),
 			getExtractions({ domain, limit: "500" } as Record<string, string>),
-		]).then(([v, e]) => {
+			getSnapshots({ domain, limit: "100" }),
+		]).then(([v, e, s]) => {
 			setVisits(v.visits);
 			setExtractions(e.extractions);
+			setSnapshots(s.snapshots);
 		}).catch(() => {}).finally(() => setLoading(false));
 	}, [domain]);
 
@@ -285,6 +290,32 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 								</div>
 								<span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", flexShrink: 0 }}>{formatDuration(v.durationMs)}</span>
 								<span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", flexShrink: 0 }}>{relativeTime(v.visitedAt)}</span>
+							</div>
+						))}
+					</div>
+				</Section>
+			)}
+
+			{/* Snapshots */}
+			{snapshots.length > 0 && (
+				<Section title={`Snapshots (${snapshots.length})`}>
+					<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+						{snapshots.map(s => (
+							<div key={s.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "8px 12px", background: "rgba(255,255,255,0.03)", borderRadius: 7, border: "1px solid rgba(255,255,255,0.05)" }}>
+								<div style={{ flex: 1, minWidth: 0 }}>
+									<div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+										<span style={{ fontSize: 13, fontWeight: 700, color: "white" }}>v{s.version}</span>
+										<span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, background: s.status === "committed" ? "rgba(81,207,102,0.15)" : "rgba(255,212,59,0.15)", color: s.status === "committed" ? "#51cf66" : "#ffd43b", textTransform: "uppercase", fontWeight: 700 }}>{s.status}</span>
+										<span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>{relativeTime(s.capturedAt)}</span>
+									</div>
+									<div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.url}</div>
+								</div>
+								<a href={`?view=diff&domain=${encodeURIComponent(s.domain)}&url=${encodeURIComponent(s.url)}`} style={{
+									fontSize: 12, color: "#74c0fc", textDecoration: "none", fontWeight: 600,
+									padding: "5px 10px", background: "rgba(116,192,252,0.1)", borderRadius: 6,
+								}}>
+									View Details
+								</a>
 							</div>
 						))}
 					</div>

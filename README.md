@@ -52,19 +52,112 @@ bun run build:dashboard
 
 Visit `http://localhost:7890` in your browser.
 
-## AI Suggestions (Ollama)
+## Distribution
 
-To enable LLM-powered suggestions using a local model:
+To share Impact with others (or reinstall on a new machine), the cleanest approach is to distribute the built extension alongside a running backend.
+
+### Packaging the extension
+
+Build everything first:
+```bash
+bun run build
+```
+
+Then zip `packages/extension/dist/` — that folder is the complete, loadable extension. Recipients load it via **Load unpacked** in `chrome://extensions`.
+
+### Auto-starting the backend on macOS
+
+To have the backend start automatically at login without keeping a terminal open:
+
+1. Create `~/Library/LaunchAgents/com.impact.backend.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.impact.backend</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/path/to/bun</string>
+    <string>run</string>
+    <string>dev:backend</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/path/to/impact</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/impact-backend.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/impact-backend.log</string>
+</dict>
+</plist>
+```
+
+Replace `/path/to/bun` (find it with `which bun`) and `/path/to/impact` with your actual paths.
+
+2. Load the service:
 
 ```bash
-ollama pull llama3.2
+launchctl load ~/Library/LaunchAgents/com.impact.backend.plist
+```
+
+To unload: `launchctl unload ~/Library/LaunchAgents/com.impact.backend.plist`
+
+Logs go to `/tmp/impact-backend.log`.
+
+---
+
+## AI Features (optional)
+
+AI features use [Ollama](https://ollama.com) running locally. They are **disabled by default** — the extension and dashboard work without them.
+
+### Setup
+
+1. **Install Ollama**: Download from [ollama.com](https://ollama.com). After installation, Ollama runs as a background service on `localhost:11434`.
+
+2. **Pull the required models**:
+
+```bash
+ollama pull qwen2.5-coder:3b
+ollama pull embeddinggemma
+```
+
+   First pull is ~2–3 GB. This only needs to be done once.
+
+3. **Start the backend with AI enabled**:
+
+```bash
 IMPACT_LLM=1 bun run dev:backend
 ```
 
-Override the model:
-```bash
-OLLAMA_MODEL=llama3.1:8b IMPACT_LLM=1 bun run dev:backend
+If using the launchd plist above, add an `EnvironmentVariables` section:
+
+```xml
+<key>EnvironmentVariables</key>
+<dict>
+  <key>IMPACT_LLM</key>
+  <string>1</string>
+</dict>
 ```
+
+### What AI enables
+
+- **LLM extraction**: Snapshots are processed through a configurable prompt to extract structured data (prices, dates, summaries)
+- **Prompt configs**: Per-URL-pattern prompts (managed in the dashboard Settings)
+- **Semantic search**: Find past snapshots by meaning via `/api/snapshots/search`
+- **Chat**: Ask questions across saved page snapshots
+
+### Changing the model
+
+Via environment variable:
+```bash
+OLLAMA_MODEL=llama3.2 IMPACT_LLM=1 bun run dev:backend
+```
+
+Or change it in the dashboard Settings page — the setting persists in the database.
 
 ## What it tracks
 
@@ -90,9 +183,11 @@ Rule-based analyzers run every 5 minutes:
 
 | Variable | Default | Description |
 |---|---|---|
-| `IMPACT_LLM` | `0` | Set to `1` to enable Ollama LLM analyzer |
-| `OLLAMA_MODEL` | `llama3.2` | Ollama model to use |
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama server URL |
+| `IMPACT_LLM` | `0` | Set to `1` to enable Ollama AI features |
+| `OLLAMA_MODEL` | `qwen2.5-coder:3b` | Generation model name |
+| `OLLAMA_EMBED_MODEL` | `embeddinggemma` | Embedding model name |
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint |
+| `BACKEND_PORT` | `7890` | Backend server port |
 
 ## Data
 

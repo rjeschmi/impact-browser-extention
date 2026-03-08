@@ -697,6 +697,7 @@ function PluginLogsViewer({ snapshotId }: { snapshotId: number | null }) {
 											</div>
 										) : output ? (
 											<div>
+												{output.error && <LogSection label="Plugin Error (Internal)" content={output.error as string} />}
 												{output.promptSent && <LogSection label="Prompt sent" content={output.promptSent as string} />}
 												{output.structuredContent && <LogSection label="Content passed to LLM" content={output.structuredContent as string} />}
 												{output.rawResult && <LogSection label="LLM result" content={JSON.stringify(output.rawResult, null, 2)} />}

@@ -36,17 +36,18 @@ export async function runPipeline(ctx: PluginContext): Promise<PluginState> {
 
 		try {
 			await plugin.run(ctx, state, pluginConfig);
-			if (debug) {
-				result.output = {
-					structuredContent: state.structuredContent?.slice(0, 2000),
-					dataKeys: Object.keys(state.data),
-					...state.debugLog,
-				};
-				state.debugLog = undefined;
-			}
 		} catch (e) {
 			result.error = String(e);
 			// Non-fatal: continue pipeline
+		}
+
+		if (debug) {
+			result.output = {
+				structuredContent: state.structuredContent?.slice(0, 2000),
+				dataKeys: Object.keys(state.data),
+				...state.debugLog,
+			};
+			state.debugLog = undefined;
 		}
 
 		result.durationMs = Math.round(performance.now() - start);

@@ -3,7 +3,7 @@ import { BACKEND_PORT } from "@impact/shared";
 import { startScheduler } from "./services/scheduler.js";
 
 // Run migrations on startup (create tables if they don't exist)
-import { db } from "./db/client.js";
+import { db, schema } from "./db/client.js";
 import { sql } from "drizzle-orm";
 
 // Auto-create tables using raw SQL (avoids needing drizzle-kit for dev)
@@ -120,16 +120,47 @@ db.run(sql`CREATE TABLE IF NOT EXISTS plugin_logs (
 db.run(sql`CREATE INDEX IF NOT EXISTS idx_plugin_logs_snapshot ON plugin_logs(snapshot_id)`);
 db.run(sql`CREATE INDEX IF NOT EXISTS idx_plugin_logs_plugin ON plugin_logs(plugin_name)`);
 
+db.run(sql`CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+)`);
+
+import { eq, and } from "drizzle-orm";
+
 // Sync prompt_configs → plugin_configs (runs every startup to catch any that were missed)
 {
-	const existing = db.all(sql`SELECT id, url_pattern, prompt, created_at, updated_at FROM prompt_configs`);
-	for (const row of existing as { id: number; url_pattern: string; prompt: string; created_at: number; updated_at: number }[]) {
-		const already = db.get(sql`SELECT id FROM plugin_configs WHERE plugin_name = 'llm-extraction' AND url_pattern = ${row.url_pattern}`);
+	const existing = db.select().from(schema.promptConfigs).all();
+	for (const row of existing) {
+		const already = db.select().from(schema.pluginConfigs)
+			.where(and(
+				eq(schema.pluginConfigs.pluginName, "llm-extraction"),
+				eq(schema.pluginConfigs.urlPattern, row.urlPattern)
+			))
+			.get();
+
 		if (already) {
-			db.run(sql`UPDATE plugin_configs SET config = ${JSON.stringify({ prompt: row.prompt })}, updated_at = ${row.updated_at} WHERE plugin_name = 'llm-extraction' AND url_pattern = ${row.url_pattern}`);
+			const currentConfig = already.config ? JSON.parse(already.config) as Record<string, unknown> : {};
+			const newConfig = { ...currentConfig, prompt: row.prompt };
+			db.update(schema.pluginConfigs)
+				.set({ 
+					config: JSON.stringify(newConfig), 
+					updatedAt: row.updatedAt 
+				})
+				.where(eq(schema.pluginConfigs.id, already.id))
+				.run();
 		} else {
-			db.run(sql`INSERT INTO plugin_configs (plugin_name, url_pattern, enabled, config, priority, created_at, updated_at)
-				VALUES ('llm-extraction', ${row.url_pattern}, 1, ${JSON.stringify({ prompt: row.prompt })}, 0, ${row.created_at}, ${row.updated_at})`);
+			db.insert(schema.pluginConfigs)
+				.values({
+					pluginName: "llm-extraction",
+					urlPattern: row.urlPattern,
+					enabled: true,
+					config: JSON.stringify({ prompt: row.prompt }),
+					priority: 0,
+					createdAt: row.createdAt,
+					updatedAt: row.updatedAt
+				})
+				.run();
 		}
 	}
 }

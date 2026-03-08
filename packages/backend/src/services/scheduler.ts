@@ -6,11 +6,14 @@ import { and, eq } from "drizzle-orm";
 const USE_LLM = process.env.IMPACT_LLM === "1";
 
 const ANALYZERS: Analyzer[] = [
+	// Disabled for now
+	/*
 	frequencyAnalyzer,
 	stalenessAnalyzer,
 	deadlineAnalyzer,
 	priceAnalyzer,
 	...(USE_LLM ? [llmAnalyzer] : []),
+	*/
 ];
 
 const INTERVAL_MS = 5 * 60 * 1000;

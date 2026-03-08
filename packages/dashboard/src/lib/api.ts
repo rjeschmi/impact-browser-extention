@@ -82,6 +82,16 @@ export async function getSettings() {
 	}>("/api/settings/stats");
 }
 
+export async function updateSettings(settings: { ollamaModel?: string }) {
+	const res = await fetch(`${BACKEND_URL}/api/settings`, {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(settings),
+	});
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+	return res.json();
+}
+
 export async function getBlocklist() {
 	return get<{ blocklist: string[] }>("/api/settings/blocklist");
 }
@@ -126,6 +136,13 @@ export async function getSnapshotForUrl(url: string) {
 	}>("/api/snapshots", { url });
 }
 
+export async function getSnapshots(params: { domain?: string; url?: string; limit?: string }) {
+	return get<{ snapshots: { id: number; url: string; domain: string; version: string; status: string; capturedAt: number; committedAt: number | null }[] }>(
+		"/api/snapshots/list",
+		params as Record<string, string>,
+	);
+}
+
 export async function reextractSnapshot(url: string): Promise<{ pendingId?: number; version?: string; autoCommitted?: boolean; error?: string }> {
 	const res = await fetch(`${BACKEND_URL}/api/snapshots/reextract`, {
 		method: "POST",
@@ -165,13 +182,36 @@ export async function searchSnapshots(q: string, limit = 10, minScore = 0.3) {
 }
 
 // Prompt configs
-export type PromptConfig = { id: number; urlPattern: string; prompt: string; slidingWindow: boolean; chunkSize: number | null; createdAt: number; updatedAt: number };
+export type PromptConfig = { 
+	id: number; 
+	urlPattern: string; 
+	prompt: string; 
+	slidingWindow: boolean; 
+	chunkSize: number | null; 
+	debug: boolean; 
+	cheerio: { selector?: string; stripTags?: string; textOnly?: boolean };
+	createdAt: number; 
+	updatedAt: number 
+};
 
 export async function getPromptConfigs() {
 	return get<{ configs: PromptConfig[]; defaultPrompt: string }>("/api/prompt-configs");
 }
 
-export async function createPromptConfig(urlPattern: string, prompt: string, extras?: { slidingWindow?: boolean; chunkSize?: number }): Promise<PromptConfig> {
+export async function suggestPrompt(url: string): Promise<{ prompt: string; cheerio: { selector?: string; stripTags?: string; textOnly?: boolean } }> {
+	const res = await fetch(`${BACKEND_URL}/api/prompt-configs/suggest`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ url }),
+	});
+	if (!res.ok) {
+		const data = await res.json() as { error?: string };
+		throw new Error(data.error ?? `HTTP ${res.status}`);
+	}
+	return res.json();
+}
+
+export async function createPromptConfig(urlPattern: string, prompt: string, extras?: { slidingWindow?: boolean; chunkSize?: number; debug?: boolean; cheerio?: PromptConfig["cheerio"] }): Promise<PromptConfig> {
 	const res = await fetch(`${BACKEND_URL}/api/prompt-configs`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -181,7 +221,7 @@ export async function createPromptConfig(urlPattern: string, prompt: string, ext
 	return res.json();
 }
 
-export async function updatePromptConfig(id: number, update: { urlPattern?: string; prompt?: string; slidingWindow?: boolean; chunkSize?: number | null }): Promise<PromptConfig> {
+export async function updatePromptConfig(id: number, update: { urlPattern?: string; prompt?: string; slidingWindow?: boolean; chunkSize?: number | null; debug?: boolean; cheerio?: PromptConfig["cheerio"] }): Promise<PromptConfig> {
 	const res = await fetch(`${BACKEND_URL}/api/prompt-configs/${id}`, {
 		method: "PATCH",
 		headers: { "Content-Type": "application/json" },
