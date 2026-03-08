@@ -603,7 +603,7 @@ app.delete("/:id", async (c) => {
 	if (!snapshot) return c.json({ error: "Not found" }, 404);
 	if (snapshot.status !== "pending") return c.json({ error: "Only pending snapshots can be discarded" }, 400);
 
-	db.delete(schema.pageSnapshots).where(eq(schema.pageSnapshots.id, id)).run();
+	deleteSnapshotsWhere(eq(schema.pageSnapshots.id, id));
 
 	return c.json({ ok: true, deleted: id });
 });
