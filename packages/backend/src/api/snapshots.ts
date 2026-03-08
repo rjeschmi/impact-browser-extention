@@ -7,6 +7,7 @@ import { isLLMEnabled, callOllama, callOllamaJson, generateEmbedding } from "../
 import { runPipeline, flushPluginLogs } from "../plugins/index.js";
 import { cleanPageText } from "../plugins/llm-extraction.js";
 import { cheerioPreprocessor } from "../plugins/cheerio-preprocessor.js";
+import { llmCleanup } from "../plugins/llm-cleanup.js";
 import { findPluginConfig } from "../plugins/config.js";
 import type { PluginContext, PluginState } from "../plugins/types.js";
 
@@ -116,7 +117,7 @@ Return ONLY a JSON object with relevant fields. Example: {"key_points": ["...", 
 
 	let result: Record<string, unknown>;
 	try {
-		result = await callOllamaJson(prompt);
+		result = await callOllamaJson(prompt, { operation: "ask", url });
 	} catch (e) {
 		return c.json({ error: "LLM call failed", detail: String(e) }, 500);
 	}
@@ -272,7 +273,7 @@ ${contextStr}
 ${historyStr}User: ${userPrompt}
 Assistant:`;
 
-		const answer = await callOllama(prompt);
+		const answer = await callOllama(prompt, { operation: "ask", url });
 		return c.json({ answer: answer.trim() });
 	} catch (e) {
 		return c.json({ error: "Ask failed", detail: String(e) }, 500);
@@ -417,6 +418,67 @@ app.get("/", async (c) => {
 		.get();
 
 	return c.json({ committed: committed ?? null, pending: pending ?? null, changed: !!pending });
+});
+
+// POST /api/snapshots/cleanup — run only the llm-cleanup plugin on the most recent snapshot data
+app.post("/cleanup", async (c) => {
+	if (!isLLMEnabled()) {
+		return c.json({ error: "LLM not enabled. Set IMPACT_LLM=1 and ensure Ollama is running." }, 503);
+	}
+	const body = await c.req.json() as { url: string; targetKey?: string };
+	const { url, targetKey } = body;
+	if (!url) return c.json({ error: "url required" }, 400);
+
+	// Use pending data if it exists, otherwise committed
+	const pending = db.select().from(schema.pageSnapshots)
+		.where(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "pending")))
+		.orderBy(desc(schema.pageSnapshots.capturedAt))
+		.get();
+	const committed = db.select().from(schema.pageSnapshots)
+		.where(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "committed")))
+		.get();
+
+	const source = pending ?? committed;
+	if (!source) return c.json({ error: "No snapshot found for this URL" }, 404);
+
+	const sourceData = JSON.parse(source.data) as Record<string, unknown>;
+	const domain = new URL(url).hostname;
+
+	// Merge any saved plugin config with the caller's targetKey override
+	const savedCfg = findPluginConfig("llm-cleanup", url);
+	const config: Record<string, unknown> = {
+		...(savedCfg?.config ?? {}),
+		...(targetKey ? { targetKey } : {}),
+		tag: true,
+		debug: true,
+	};
+
+	const ctx: PluginContext = { url, domain, pageHtml: source.pageHtml ?? null, pageText: source.pageText ?? null, extensionData: {} };
+	const state: PluginState = { structuredContent: null, data: { ...sourceData }, pluginResults: [] };
+
+	try {
+		await llmCleanup.run(ctx, state, config);
+	} catch (e) {
+		return c.json({ error: "Cleanup failed", detail: String(e) }, 500);
+	}
+
+	const version = generateVersion(url);
+	const dataWithVersion = { ...state.data, version };
+
+	deleteSnapshotsWhere(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "pending")));
+
+	if (!committed) {
+		const snapshot = db.insert(schema.pageSnapshots)
+			.values({ url, domain, version, data: JSON.stringify(dataWithVersion), pageText: source.pageText, pageHtml: source.pageHtml, status: "committed", capturedAt: Date.now(), committedAt: Date.now() })
+			.returning().get();
+		return c.json({ autoCommitted: true, snapshot });
+	}
+
+	const newPending = db.insert(schema.pageSnapshots)
+		.values({ url, domain, version, data: JSON.stringify(dataWithVersion), pageText: source.pageText, pageHtml: source.pageHtml, status: "pending", capturedAt: Date.now() })
+		.returning().get();
+
+	return c.json({ pendingId: newPending.id, version });
 });
 
 // POST /api/snapshots/reextract — re-run extraction pipeline using stored pageText/pageHtml

@@ -143,6 +143,17 @@ export async function getSnapshots(params: { domain?: string; url?: string; limi
 	);
 }
 
+export async function cleanupSnapshot(url: string, targetKey?: string): Promise<{ pendingId?: number; version?: string; autoCommitted?: boolean; error?: string }> {
+	const res = await fetch(`${BACKEND_URL}/api/snapshots/cleanup`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ url, ...(targetKey ? { targetKey } : {}) }),
+	});
+	const data = await res.json() as { pendingId?: number; version?: string; autoCommitted?: boolean; error?: string };
+	if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+	return data;
+}
+
 export async function reextractSnapshot(url: string): Promise<{ pendingId?: number; version?: string; autoCommitted?: boolean; error?: string }> {
 	const res = await fetch(`${BACKEND_URL}/api/snapshots/reextract`, {
 		method: "POST",
@@ -355,6 +366,10 @@ export async function pushToRegistry(labelId: number): Promise<{ ok: boolean; en
 	return res.json();
 }
 
+export async function browseRegistryEntry(id: number): Promise<RegistryEntry & { sampleData: string | null }> {
+	return get(`/api/registry/browse/${id}`);
+}
+
 export async function browseRegistry(q?: string): Promise<{ entries: RegistryEntry[] }> {
 	const params: Record<string, string> = {};
 	if (q) params.q = q;
@@ -372,4 +387,62 @@ export async function importFromRegistry(entryId: number): Promise<{ ok: boolean
 		throw new Error(data.error ?? `HTTP ${res.status}`);
 	}
 	return res.json();
+}
+
+// LLM Stats
+export interface LlmStatRow {
+	model: string;
+	operation: string;
+	calls: number;
+	successCalls: number;
+	avgWallMs: number;
+	avgEvalMs: number | null;
+	totalPromptTokens: number | null;
+	totalCompletionTokens: number | null;
+	avgCompletionTokens: number | null;
+	avgPromptChars: number;
+}
+
+export interface LlmTotals {
+	totalCalls: number;
+	totalSuccess: number;
+	totalPromptTokens: number | null;
+	totalCompletionTokens: number | null;
+	avgWallMs: number;
+}
+
+export interface LlmStatCall {
+	id: number;
+	model: string;
+	operation: string;
+	url: string | null;
+	pluginName: string | null;
+	promptChars: number;
+	responseChars: number;
+	promptTokens: number | null;
+	completionTokens: number | null;
+	totalDurationMs: number | null;
+	evalDurationMs: number | null;
+	wallDurationMs: number;
+	attempt: number;
+	success: boolean;
+	error: string | null;
+	createdAt: number;
+}
+
+export async function getLlmStatsSummary(since?: number): Promise<{ summary: LlmStatRow[]; totals: LlmTotals }> {
+	const params: Record<string, string> = {};
+	if (since) params.since = String(since);
+	return get("/api/llm-stats/summary", params);
+}
+
+export async function getLlmStatsRecent(limit?: number): Promise<{ calls: LlmStatCall[] }> {
+	const params: Record<string, string> = {};
+	if (limit) params.limit = String(limit);
+	return get("/api/llm-stats/recent", params);
+}
+
+export async function clearLlmStats(): Promise<void> {
+	const res = await fetch(`${BACKEND_URL}/api/llm-stats`, { method: "DELETE" });
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }

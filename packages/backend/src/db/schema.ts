@@ -140,6 +140,33 @@ export const appSettings = sqliteTable(
 	}
 );
 
+export const llmStats = sqliteTable(
+	"llm_stats",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		model: text("model").notNull(),
+		operation: text("operation").notNull().default("unknown"), // 'extraction' | 'cleanup' | 'ask' | 'generate' | 'suggest'
+		url: text("url"),
+		pluginName: text("plugin_name"),
+		promptChars: integer("prompt_chars").notNull(),
+		responseChars: integer("response_chars").notNull().default(0),
+		promptTokens: integer("prompt_tokens"),        // prompt_eval_count from Ollama
+		completionTokens: integer("completion_tokens"), // eval_count from Ollama
+		totalDurationMs: integer("total_duration_ms"), // total_duration / 1e6
+		evalDurationMs: integer("eval_duration_ms"),   // eval_duration / 1e6 (generation only)
+		wallDurationMs: integer("wall_duration_ms").notNull(),
+		attempt: integer("attempt").notNull().default(1),
+		success: integer("success", { mode: "boolean" }).notNull().default(true),
+		error: text("error"),
+		createdAt: integer("created_at").notNull(),
+	},
+	(table) => [
+		index("idx_llm_stats_model").on(table.model),
+		index("idx_llm_stats_created").on(table.createdAt),
+		index("idx_llm_stats_operation").on(table.operation),
+	],
+);
+
 export const publicSiteLabels = sqliteTable(
 	"public_site_labels",
 	{

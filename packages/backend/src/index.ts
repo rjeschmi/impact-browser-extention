@@ -137,6 +137,28 @@ db.run(sql`CREATE TABLE IF NOT EXISTS public_site_labels (
   updated_at INTEGER NOT NULL
 )`);
 
+db.run(sql`CREATE TABLE IF NOT EXISTS llm_stats (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  model TEXT NOT NULL,
+  operation TEXT NOT NULL DEFAULT 'unknown',
+  url TEXT,
+  plugin_name TEXT,
+  prompt_chars INTEGER NOT NULL,
+  response_chars INTEGER NOT NULL DEFAULT 0,
+  prompt_tokens INTEGER,
+  completion_tokens INTEGER,
+  total_duration_ms INTEGER,
+  eval_duration_ms INTEGER,
+  wall_duration_ms INTEGER NOT NULL,
+  attempt INTEGER NOT NULL DEFAULT 1,
+  success INTEGER NOT NULL DEFAULT 1,
+  error TEXT,
+  created_at INTEGER NOT NULL
+)`);
+db.run(sql`CREATE INDEX IF NOT EXISTS idx_llm_stats_model ON llm_stats(model)`);
+db.run(sql`CREATE INDEX IF NOT EXISTS idx_llm_stats_created ON llm_stats(created_at)`);
+db.run(sql`CREATE INDEX IF NOT EXISTS idx_llm_stats_operation ON llm_stats(operation)`);
+
 import { eq, and } from "drizzle-orm";
 
 // Sync prompt_configs → plugin_configs (runs every startup to catch any that were missed)

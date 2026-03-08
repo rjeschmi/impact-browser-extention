@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "preact/hooks";
-import { getSnapshotForUrl, commitSnapshotById, reextractSnapshot, getSnapshotHtml, getPluginConfigs, createPluginConfig, updatePluginConfig, deletePluginConfig, getPluginLogs } from "../lib/api.js";
+import { getSnapshotForUrl, commitSnapshotById, reextractSnapshot, cleanupSnapshot, getSnapshotHtml, getPluginConfigs, createPluginConfig, updatePluginConfig, deletePluginConfig, getPluginLogs } from "../lib/api.js";
 import type { PluginConfig } from "../lib/api.js";
 
 const card = { background: "#1e2d50", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.07)", padding: "18px 20px" };
@@ -106,6 +106,7 @@ export function SnapshotDiff({ url, domain }: { url: string; domain: string }) {
 	const [cheerioLoading, setCheerioLoading] = useState(false);
 	const [committing, setCommitting] = useState(false);
 	const [rerunning, setRerunning] = useState(false);
+	const [cleaning, setCleaning] = useState(false);
 	const [done, setDone] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [rejected, setRejected] = useState<Set<string>>(new Set());
@@ -185,6 +186,19 @@ export function SnapshotDiff({ url, domain }: { url: string; domain: string }) {
 		}
 	};
 
+	const cleanup = async () => {
+		setCleaning(true);
+		setError(null);
+		try {
+			await cleanupSnapshot(url);
+			await refresh();
+		} catch (e) {
+			setError(String(e));
+		} finally {
+			setCleaning(false);
+		}
+	};
+
 	const switchToCheerioTab = useCallback(async () => {
 		setRawContentTab("cheerio");
 		if (cheerioHtml !== null) return;
@@ -239,11 +253,19 @@ export function SnapshotDiff({ url, domain }: { url: string; domain: string }) {
 				<div style={{ ...card, display: "flex", alignItems: "center", gap: 10, padding: "14px 20px" }}>
 					<span style={{ width: 8, height: 8, borderRadius: "50%", background: "#51cf66", display: "inline-block", flexShrink: 0 }} />
 					<span style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", flex: 1 }}>No changes — current data matches committed v{committed.version}</span>
-					<button onClick={rerun} disabled={rerunning} style={{
+					<button onClick={cleanup} disabled={cleaning || rerunning} style={{
 						background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.6)",
 						border: "1px solid rgba(255,255,255,0.12)", borderRadius: 7,
-						padding: "6px 12px", fontSize: 12, cursor: rerunning ? "default" : "pointer",
-						opacity: rerunning ? 0.6 : 1, flexShrink: 0,
+						padding: "6px 12px", fontSize: 12, cursor: cleaning || rerunning ? "default" : "pointer",
+						opacity: cleaning || rerunning ? 0.6 : 1, flexShrink: 0,
+					}}>
+						{cleaning ? "Cleaning…" : "✦ Cleanup"}
+					</button>
+					<button onClick={rerun} disabled={rerunning || cleaning} style={{
+						background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.6)",
+						border: "1px solid rgba(255,255,255,0.12)", borderRadius: 7,
+						padding: "6px 12px", fontSize: 12, cursor: rerunning || cleaning ? "default" : "pointer",
+						opacity: rerunning || cleaning ? 0.6 : 1, flexShrink: 0,
 					}}>
 						{rerunning ? "Running…" : "↺ Rerun extraction"}
 					</button>
@@ -289,14 +311,26 @@ export function SnapshotDiff({ url, domain }: { url: string; domain: string }) {
 				</div>
 				<div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
 					<button
-						onClick={rerun}
-						disabled={rerunning || committing}
+						onClick={cleanup}
+						disabled={cleaning || rerunning || committing}
 						style={{
 							background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.6)",
 							border: "1px solid rgba(255,255,255,0.12)", borderRadius: 7,
 							padding: "8px 14px", fontSize: 13, fontWeight: 500,
-							cursor: rerunning || committing ? "default" : "pointer",
-							opacity: rerunning || committing ? 0.6 : 1,
+							cursor: cleaning || rerunning || committing ? "default" : "pointer",
+							opacity: cleaning || rerunning || committing ? 0.6 : 1,
+						}}>
+						{cleaning ? "Cleaning…" : "✦ Cleanup"}
+					</button>
+					<button
+						onClick={rerun}
+						disabled={rerunning || committing || cleaning}
+						style={{
+							background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.6)",
+							border: "1px solid rgba(255,255,255,0.12)", borderRadius: 7,
+							padding: "8px 14px", fontSize: 13, fontWeight: 500,
+							cursor: rerunning || committing || cleaning ? "default" : "pointer",
+							opacity: rerunning || committing || cleaning ? 0.6 : 1,
 						}}>
 						{rerunning ? "Running…" : "↺ Rerun"}
 					</button>

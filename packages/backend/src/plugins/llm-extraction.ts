@@ -69,7 +69,7 @@ export const llmExtraction: Plugin = {
 			const truncated = cleanedContent.slice(0, chunkSize);
 			const prompt = promptTemplate.replace("{url}", ctx.url).replace("{pageText}", truncated);
 			try {
-				const extracted = await callOllamaJson(prompt);
+				const extracted = await callOllamaJson(prompt, { operation: "extraction", url: ctx.url, pluginName: "llm-extraction" });
 				Object.assign(state.data, extracted);
 				state.data.promptUsed = promptTemplate;
 				if (debug) {
@@ -108,7 +108,7 @@ export const llmExtraction: Plugin = {
 				.replace("{url}", ctx.url)
 				.replace("{pageText}", `[Part ${i + 1}/${chunks.length}]\n${chunks[i]}`);
 			try {
-				const result = await callOllamaJson(chunkPrompt);
+				const result = await callOllamaJson(chunkPrompt, { operation: "extraction", url: ctx.url, pluginName: "llm-extraction" });
 				merged = mergeResults(merged, result);
 				if (debug) chunkLogs.push({ prompt: chunkPrompt, result });
 			} catch (e) {

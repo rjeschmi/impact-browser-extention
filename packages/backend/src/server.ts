@@ -13,6 +13,7 @@ import promptConfigs from "./api/prompt-configs.js";
 import pluginConfigs from "./api/plugin-configs.js";
 import pluginLogs from "./api/plugin-logs.js";
 import registry from "./api/registry.js";
+import llmStats from "./api/llm-stats.js";
 import "./plugins/index.js";
 
 const DASHBOARD_DIR = join(dirname(import.meta.dir), "..", "dashboard", "dist");
@@ -43,6 +44,7 @@ app.route("/api/prompt-configs", promptConfigs);
 app.route("/api/plugin-configs", pluginConfigs);
 app.route("/api/plugin-logs", pluginLogs);
 app.route("/api/registry", registry);
+app.route("/api/llm-stats", llmStats);
 
 const MIME: Record<string, string> = {
 	".html": "text/html; charset=utf-8",

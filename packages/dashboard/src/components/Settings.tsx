@@ -10,6 +10,7 @@ import {
 } from "../lib/api.js";
 import { PromptConfigManager } from "./PromptConfigManager.js";
 import { RegistryBrowser } from "./RegistryBrowser.js";
+import { LlmStats } from "./LlmStats.js";
 
 type Stats = {
 	visits: number;
@@ -256,6 +257,14 @@ export function Settings({ initialUrl }: { initialUrl?: string }) {
 					</>
 				)}
 			</div>
+
+			{/* LLM Stats */}
+			{stats?.llmEnabled && (
+				<div style={card}>
+					<span style={label}>LLM Performance</span>
+					<LlmStats />
+				</div>
+			)}
 
 			{/* Blocklist */}
 			<div style={card}>
