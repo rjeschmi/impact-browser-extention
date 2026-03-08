@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@impact/shared": "workspace:*",
+    "cheerio": "^1.2.0",
     "drizzle-orm": "^0.36.0",
     "hono": "^4.6.0",
     "zod": "^3.23.0"

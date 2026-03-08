@@ -11,4 +11,6 @@ export const API_ROUTES = {
 	reminders: "/api/reminders",
 	snapshots: "/api/snapshots",
 	promptConfigs: "/api/prompt-configs",
+	pluginConfigs: "/api/plugin-configs",
+	pluginLogs: "/api/plugin-logs",
 } as const;

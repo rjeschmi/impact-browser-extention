@@ -120,8 +120,8 @@ export function getExportUrl() {
 
 export async function getSnapshotForUrl(url: string) {
 	return get<{
-		committed: { id: number; version: string; data: string; committedAt: number | null } | null;
-		pending: { id: number; version: string; data: string; capturedAt: number } | null;
+		committed: { id: number; version: string; data: string; pageText: string | null; committedAt: number | null } | null;
+		pending: { id: number; version: string; data: string; pageText: string | null; capturedAt: number } | null;
 		changed: boolean;
 	}>("/api/snapshots", { url });
 }
@@ -165,23 +165,23 @@ export async function searchSnapshots(q: string, limit = 10, minScore = 0.3) {
 }
 
 // Prompt configs
-type PromptConfig = { id: number; urlPattern: string; prompt: string; createdAt: number; updatedAt: number };
+export type PromptConfig = { id: number; urlPattern: string; prompt: string; slidingWindow: boolean; chunkSize: number | null; createdAt: number; updatedAt: number };
 
 export async function getPromptConfigs() {
 	return get<{ configs: PromptConfig[]; defaultPrompt: string }>("/api/prompt-configs");
 }
 
-export async function createPromptConfig(urlPattern: string, prompt: string): Promise<PromptConfig> {
+export async function createPromptConfig(urlPattern: string, prompt: string, extras?: { slidingWindow?: boolean; chunkSize?: number }): Promise<PromptConfig> {
 	const res = await fetch(`${BACKEND_URL}/api/prompt-configs`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ urlPattern, prompt }),
+		body: JSON.stringify({ urlPattern, prompt, ...extras }),
 	});
 	if (!res.ok) throw new Error(`HTTP ${res.status}`);
 	return res.json();
 }
 
-export async function updatePromptConfig(id: number, update: { urlPattern?: string; prompt?: string }): Promise<PromptConfig> {
+export async function updatePromptConfig(id: number, update: { urlPattern?: string; prompt?: string; slidingWindow?: boolean; chunkSize?: number | null }): Promise<PromptConfig> {
 	const res = await fetch(`${BACKEND_URL}/api/prompt-configs/${id}`, {
 		method: "PATCH",
 		headers: { "Content-Type": "application/json" },
@@ -193,6 +193,58 @@ export async function updatePromptConfig(id: number, update: { urlPattern?: stri
 
 export async function deletePromptConfig(id: number): Promise<void> {
 	const res = await fetch(`${BACKEND_URL}/api/prompt-configs/${id}`, { method: "DELETE" });
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function getPluginLogs(snapshotId: number) {
+	return get<{ logs: { id: number; pluginName: string; durationMs: number; inputData: string | null; outputData: string | null; error: string | null }[] }>(
+		"/api/plugin-logs",
+		{ snapshotId: String(snapshotId) },
+	);
+}
+
+export async function getSnapshotHtml(url: string): Promise<{ structuredContent: string | null; pageText: string | null; hasHtml: boolean }> {
+	return get("/api/snapshots/html", { url });
+}
+
+// Plugin configs
+export type PluginConfig = {
+	id: number;
+	pluginName: string;
+	urlPattern: string;
+	enabled: boolean;
+	config: string | null;
+	priority: number;
+	createdAt: number;
+	updatedAt: number;
+};
+
+export async function getPluginConfigs() {
+	return get<{ configs: PluginConfig[] }>("/api/plugin-configs");
+}
+
+export async function createPluginConfig(data: { pluginName: string; urlPattern: string; enabled?: boolean; config?: Record<string, unknown>; priority?: number }): Promise<PluginConfig> {
+	const res = await fetch(`${BACKEND_URL}/api/plugin-configs`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(data),
+	});
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+	return res.json();
+}
+
+export async function updatePluginConfig(id: number, data: { urlPattern?: string; enabled?: boolean; config?: Record<string, unknown>; priority?: number }): Promise<PluginConfig> {
+	const res = await fetch(`${BACKEND_URL}/api/plugin-configs/${id}`, {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(data),
+	});
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+	return res.json();
+}
+
+export async function deletePluginConfig(id: number): Promise<void> {
+	const res = await fetch(`${BACKEND_URL}/api/plugin-configs/${id}`, { method: "DELETE" });
 	if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 

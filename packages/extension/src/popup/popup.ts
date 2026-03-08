@@ -177,9 +177,9 @@ showDiffBtn.addEventListener("click", async () => {
 	showDiffBtn.style.opacity = "0.6";
 	try {
 		const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-		const response = await chrome.tabs.sendMessage(tab.id!, { type: "GET_SNAPSHOT_DATA" }) as { snapshotData: Record<string, unknown> | null; pageText: string };
-		if (response?.snapshotData) {
-			await submitSnapshot(currentUrl, currentDomain, response.snapshotData, response.pageText);
+		const response = await chrome.tabs.sendMessage(tab.id!, { type: "GET_SNAPSHOT_DATA" }) as { snapshotData: Record<string, unknown> | null; pageText: string; pageHtml?: string };
+		if (response) {
+			await submitSnapshot(currentUrl, currentDomain, response.snapshotData ?? {}, response.pageText, response.pageHtml);
 		}
 	} catch {
 		// Proceed to dashboard even if content script fails (no snapshot data yet is fine)

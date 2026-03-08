@@ -89,6 +89,51 @@ db.run(sql`CREATE TABLE IF NOT EXISTS prompt_configs (
   updated_at INTEGER NOT NULL
 )`);
 
+// page_html column on snapshots
+try { db.run(sql`ALTER TABLE page_snapshots ADD COLUMN page_html TEXT`); } catch {}
+
+// Plugin configs table
+db.run(sql`CREATE TABLE IF NOT EXISTS plugin_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  plugin_name TEXT NOT NULL,
+  url_pattern TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  config TEXT,
+  priority INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+)`);
+db.run(sql`CREATE INDEX IF NOT EXISTS idx_plugin_configs_name ON plugin_configs(plugin_name)`);
+
+// Plugin logs table
+db.run(sql`CREATE TABLE IF NOT EXISTS plugin_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  snapshot_id INTEGER REFERENCES page_snapshots(id),
+  plugin_name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  input_data TEXT,
+  output_data TEXT,
+  error TEXT,
+  created_at INTEGER NOT NULL
+)`);
+db.run(sql`CREATE INDEX IF NOT EXISTS idx_plugin_logs_snapshot ON plugin_logs(snapshot_id)`);
+db.run(sql`CREATE INDEX IF NOT EXISTS idx_plugin_logs_plugin ON plugin_logs(plugin_name)`);
+
+// Sync prompt_configs → plugin_configs (runs every startup to catch any that were missed)
+{
+	const existing = db.all(sql`SELECT id, url_pattern, prompt, created_at, updated_at FROM prompt_configs`);
+	for (const row of existing as { id: number; url_pattern: string; prompt: string; created_at: number; updated_at: number }[]) {
+		const already = db.get(sql`SELECT id FROM plugin_configs WHERE plugin_name = 'llm-extraction' AND url_pattern = ${row.url_pattern}`);
+		if (already) {
+			db.run(sql`UPDATE plugin_configs SET config = ${JSON.stringify({ prompt: row.prompt })}, updated_at = ${row.updated_at} WHERE plugin_name = 'llm-extraction' AND url_pattern = ${row.url_pattern}`);
+		} else {
+			db.run(sql`INSERT INTO plugin_configs (plugin_name, url_pattern, enabled, config, priority, created_at, updated_at)
+				VALUES ('llm-extraction', ${row.url_pattern}, 1, ${JSON.stringify({ prompt: row.prompt })}, 0, ${row.created_at}, ${row.updated_at})`);
+		}
+	}
+}
+
 console.log(`Impact backend starting on http://localhost:${BACKEND_PORT}`);
 startScheduler();
 

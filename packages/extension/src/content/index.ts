@@ -33,6 +33,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		sendResponse({
 			snapshotData: cachedSnapshotData,
 			pageText: cachedPageText || document.body.innerText.trim().slice(0, 3000),
+			pageHtml: document.documentElement.outerHTML.slice(0, 512_000),
 		});
 	}
 	return true;

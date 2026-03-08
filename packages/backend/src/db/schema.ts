@@ -74,6 +74,7 @@ export const pageSnapshots = sqliteTable(
 		version: text("version").notNull(), // YYYY.MM.DD.NN
 		data: text("data").notNull(), // JSON
 		pageText: text("page_text"), // raw page content used for LLM
+		pageHtml: text("page_html"), // raw HTML for Cheerio processing
 		status: text("status").notNull().default("pending"), // "pending" | "committed"
 		capturedAt: integer("captured_at").notNull(),
 		committedAt: integer("committed_at"),
@@ -94,4 +95,38 @@ export const promptConfigs = sqliteTable(
 		createdAt: integer("created_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
 	},
+);
+
+export const pluginConfigs = sqliteTable(
+	"plugin_configs",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		pluginName: text("plugin_name").notNull(),
+		urlPattern: text("url_pattern").notNull(),
+		enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+		config: text("config"), // JSON: plugin-specific settings
+		priority: integer("priority").notNull().default(0),
+		createdAt: integer("created_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [index("idx_plugin_configs_name").on(table.pluginName)],
+);
+
+export const pluginLogs = sqliteTable(
+	"plugin_logs",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		snapshotId: integer("snapshot_id").references(() => pageSnapshots.id),
+		pluginName: text("plugin_name").notNull(),
+		url: text("url").notNull(),
+		durationMs: integer("duration_ms").notNull(),
+		inputData: text("input_data"),
+		outputData: text("output_data"),
+		error: text("error"),
+		createdAt: integer("created_at").notNull(),
+	},
+	(table) => [
+		index("idx_plugin_logs_snapshot").on(table.snapshotId),
+		index("idx_plugin_logs_plugin").on(table.pluginName),
+	],
 );

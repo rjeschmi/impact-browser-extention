@@ -13,7 +13,7 @@ export const PageVisitSchema = z.object({
 
 export type PageVisit = z.infer<typeof PageVisitSchema>;
 
-export const PageVisitBatchSchema = z.array(PageVisitSchema).min(1).max(100);
+export const PageVisitBatchSchema = z.array(PageVisitSchema).min(1).max(500);
 
 export interface StoredPageVisit extends PageVisit {
 	id: number;

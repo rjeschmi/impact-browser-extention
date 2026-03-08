@@ -95,12 +95,12 @@ export async function checkHealth(): Promise<boolean> {
 	}
 }
 
-export async function submitSnapshot(url: string, domain: string, data: Record<string, unknown>, pageText?: string): Promise<{ changed: boolean; pendingId?: number; autoCommitted?: boolean }> {
+export async function submitSnapshot(url: string, domain: string, data: Record<string, unknown>, pageText?: string, pageHtml?: string): Promise<{ changed: boolean; pendingId?: number; autoCommitted?: boolean }> {
 	try {
 		const res = await fetch(`${BACKEND_URL}${API_ROUTES.snapshots}`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ url, domain, data, pageText }),
+			body: JSON.stringify({ url, domain, data, pageText, pageHtml }),
 		});
 		if (!res.ok) return { changed: false };
 		return res.json();

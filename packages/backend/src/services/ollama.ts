@@ -11,7 +11,7 @@ export async function callOllama(prompt: string): Promise<string> {
   const res = await fetch(`${OLLAMA_URL}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false, options: { temperature: 0.3, num_predict: 1024 } }),
+    body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false, options: { temperature: 0.3, num_predict: 1024, num_ctx: 8192 } }),
     signal: AbortSignal.timeout(90_000),
   });
   if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
@@ -29,7 +29,7 @@ export async function callOllamaJson(prompt: string): Promise<Record<string, unk
         prompt,
         stream: false,
         format: "json",
-        options: { temperature: 0.1, num_predict: 1024 },
+        options: { temperature: 0.1, num_predict: 1024, num_ctx: 8192 },
       }),
       signal: AbortSignal.timeout(90_000),
     });

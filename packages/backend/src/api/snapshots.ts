@@ -4,7 +4,11 @@ import { eq, and, desc, like, not, isNotNull, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { isLLMEnabled, callOllama, callOllamaJson, generateEmbedding } from "../services/ollama.js";
-import { findPromptForUrl, DEFAULT_EXTRACTION_PROMPT } from "./prompt-configs.js";
+import { runPipeline, flushPluginLogs } from "../plugins/index.js";
+import { cleanPageText } from "../plugins/llm-extraction.js";
+import { cheerioPreprocessor } from "../plugins/cheerio-preprocessor.js";
+import { findPluginConfig } from "../plugins/config.js";
+import type { PluginContext, PluginState } from "../plugins/types.js";
 
 const app = new Hono();
 
@@ -13,6 +17,7 @@ const SnapshotSubmitSchema = z.object({
 	domain: z.string(),
 	data: z.record(z.unknown()),
 	pageText: z.string().optional(),
+	pageHtml: z.string().optional(),
 });
 
 function generateVersion(url: string): string {
@@ -37,17 +42,6 @@ function dataChanged(committedData: string, newData: Record<string, unknown>): b
 	}
 }
 
-// Clean raw page text before sending to LLM — collapse whitespace, drop short nav lines
-function cleanPageText(raw: string, maxChars = 3000): string {
-	return raw
-		.split("\n")
-		.map(l => l.trim())
-		.filter(l => l.length > 20) // drop nav items, single words, etc.
-		.join("\n")
-		.replace(/\n{3,}/g, "\n\n") // collapse blank lines
-		.slice(0, maxChars);
-}
-
 // Extract all meaningful text from a snapshot data object for embedding
 function buildEmbedText(data: Record<string, unknown>): string {
 	const parts: string[] = [];
@@ -62,6 +56,19 @@ function buildEmbedText(data: Record<string, unknown>): string {
 		}
 	}
 	return parts.join(" ");
+}
+
+/** Delete plugin_logs for snapshots matching a condition, then delete the snapshots. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function deleteSnapshotsWhere(where: any): void {
+	const ids = db.select({ id: schema.pageSnapshots.id }).from(schema.pageSnapshots).where(where).all().map(r => r.id);
+	if (ids.length === 0) return;
+	if (ids.length === 1) {
+		db.delete(schema.pluginLogs).where(eq(schema.pluginLogs.snapshotId, ids[0])).run();
+	} else {
+		db.delete(schema.pluginLogs).where(sql`${schema.pluginLogs.snapshotId} IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`).run();
+	}
+	db.delete(schema.pageSnapshots).where(where).run();
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -93,7 +100,7 @@ app.post("/prompt", async (c) => {
 
 URL: ${url}
 Page content:
-${pageText.slice(0, 3000)}
+${pageText.slice(0, 32000)}
 
 User instruction: ${userPrompt}
 
@@ -122,9 +129,7 @@ Return ONLY a JSON object with relevant fields. Example: {"key_points": ["...", 
 	const mergedData = { ...baseData, ...result, version };
 
 	// Replace any existing pending for this URL
-	db.delete(schema.pageSnapshots)
-		.where(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "pending")))
-		.run();
+	deleteSnapshotsWhere(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "pending")));
 
 	const pending = db
 		.insert(schema.pageSnapshots)
@@ -232,13 +237,13 @@ app.post("/ask", async (c) => {
 			.where(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "committed")))
 			.get();
 
-		const pageText = committed?.pageText ? cleanPageText(committed.pageText, 3000) : null;
+		const pageText = committed?.pageText ? cleanPageText(committed.pageText, 32000) : null;
 		const structuredData = committed
 			? JSON.parse(committed.data) as Record<string, unknown>
 			: null;
 
 		const contextParts: string[] = [];
-		if (pageText) contextParts.push(`Page content:\n${pageText.slice(0, 3000)}`);
+		if (pageText) contextParts.push(`Page content:\n${pageText.slice(0, 32000)}`);
 		if (structuredData) {
 			const { promptUsed: _, version: __, ...displayData } = structuredData;
 			contextParts.push(`Extracted data:\n${JSON.stringify(displayData, null, 2)}`);
@@ -266,27 +271,50 @@ Assistant:`;
 	}
 });
 
+// GET /api/snapshots/html?url=... — return cheerio-processed HTML for a URL
+app.get("/html", async (c) => {
+	const url = c.req.query("url");
+	if (!url) return c.json({ error: "url required" }, 400);
+
+	const snap = db
+		.select()
+		.from(schema.pageSnapshots)
+		.where(eq(schema.pageSnapshots.url, url))
+		.orderBy(desc(schema.pageSnapshots.capturedAt))
+		.get();
+
+	if (!snap) return c.json({ structuredContent: null, pageText: null, hasHtml: false });
+
+	const { pageHtml, pageText } = snap;
+
+	if (!pageHtml) return c.json({ structuredContent: null, pageText: pageText ?? null, hasHtml: false });
+
+	const pluginCfg = findPluginConfig("cheerio-preprocessor", url);
+	const ctx: PluginContext = { url, domain: snap.domain, pageHtml, pageText: pageText ?? null, extensionData: {} };
+	const state: PluginState = { structuredContent: null, data: {}, pluginResults: [] };
+	try {
+		await cheerioPreprocessor.run(ctx, state, pluginCfg?.config);
+	} catch (e) {
+		return c.json({ error: "Cheerio failed", detail: String(e) }, 500);
+	}
+
+	return c.json({ structuredContent: state.structuredContent, pageText: pageText ?? null, hasHtml: true });
+});
+
 // POST /api/snapshots — submit a candidate snapshot
 app.post("/", async (c) => {
 	const body = await c.req.json();
-	const { url, domain, data, pageText } = SnapshotSubmitSchema.parse(body);
+	const { url, domain, data, pageText, pageHtml } = SnapshotSubmitSchema.parse(body);
 
-	// LLM extraction using matched prompt config (or default prompt)
-	if (isLLMEnabled() && pageText) {
-		try {
-			const promptTemplate = findPromptForUrl(url) ?? DEFAULT_EXTRACTION_PROMPT;
-			const prompt = promptTemplate
-				.replace("{url}", url)
-				.replace("{pageText}", cleanPageText(pageText));
-
-			const extracted = await callOllamaJson(prompt);
-			// Merge LLM extraction over rule-based data; LLM takes precedence
-			Object.assign(data, extracted);
-			data.promptUsed = promptTemplate;
-		} catch {
-			// Non-fatal: continue with rule-based data only
-		}
-	}
+	// Run plugin pipeline (Cheerio preprocessor, LLM extraction, etc.)
+	const pipelineResult = await runPipeline({
+		url,
+		domain,
+		pageHtml: pageHtml ?? null,
+		pageText: pageText ?? null,
+		extensionData: data,
+	});
+	const finalData = pipelineResult.data;
 
 	const committed = db
 		.select()
@@ -295,7 +323,7 @@ app.post("/", async (c) => {
 		.get();
 
 	const version = generateVersion(url);
-	const dataWithVersion = { ...data, version };
+	const dataWithVersion = { ...finalData, version };
 
 	// First-time: auto-commit
 	if (!committed) {
@@ -313,9 +341,10 @@ app.post("/", async (c) => {
 		}
 		const snapshot = db
 			.insert(schema.pageSnapshots)
-			.values({ url, domain, version, data: JSON.stringify(dataWithVersion), pageText: pageText ?? null, status: "committed", capturedAt: Date.now(), committedAt: Date.now(), embedding })
+			.values({ url, domain, version, data: JSON.stringify(dataWithVersion), pageText: pageText ?? null, pageHtml: pageHtml ?? null, status: "committed", capturedAt: Date.now(), committedAt: Date.now(), embedding })
 			.returning()
 			.get();
+		flushPluginLogs(snapshot.id, url, pipelineResult.pluginResults);
 		return c.json({ changed: false, snapshot, autoCommitted: true }, 201);
 	}
 
@@ -325,15 +354,14 @@ app.post("/", async (c) => {
 	}
 
 	// Different: store as pending (replace any existing pending for this URL)
-	db.delete(schema.pageSnapshots)
-		.where(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "pending")))
-		.run();
+	deleteSnapshotsWhere(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "pending")));
 
 	const pending = db
 		.insert(schema.pageSnapshots)
-		.values({ url, domain, version, data: JSON.stringify(dataWithVersion), pageText: pageText ?? null, status: "pending", capturedAt: Date.now() })
+		.values({ url, domain, version, data: JSON.stringify(dataWithVersion), pageText: pageText ?? null, pageHtml: pageHtml ?? null, status: "pending", capturedAt: Date.now() })
 		.returning()
 		.get();
+	flushPluginLogs(pending.id, url, pipelineResult.pluginResults);
 
 	return c.json({ changed: true, pendingId: pending.id, version, committedVersion: committed.version }, 201);
 });
@@ -359,7 +387,7 @@ app.get("/", async (c) => {
 	return c.json({ committed: committed ?? null, pending: pending ?? null, changed: !!pending });
 });
 
-// POST /api/snapshots/reextract — re-run LLM extraction using stored pageText
+// POST /api/snapshots/reextract — re-run extraction pipeline using stored pageText/pageHtml
 app.post("/reextract", async (c) => {
 	if (!isLLMEnabled()) {
 		return c.json({ error: "LLM not enabled. Set IMPACT_LLM=1 and ensure Ollama is running." }, 503);
@@ -376,22 +404,21 @@ app.post("/reextract", async (c) => {
 		.orderBy(desc(schema.pageSnapshots.capturedAt))
 		.get();
 
-	if (!existing?.pageText) {
+	if (!existing?.pageText && !existing?.pageHtml) {
 		return c.json({ error: "No stored page text for this URL. Save a snapshot from the extension first." }, 404);
 	}
 
-	const promptTemplate = findPromptForUrl(url) ?? DEFAULT_EXTRACTION_PROMPT;
-	const prompt = promptTemplate
-		.replace("{url}", url)
-		.replace("{pageText}", cleanPageText(existing.pageText));
+	const domain = new URL(url).hostname;
+	const pipelineResult = await runPipeline({
+		url,
+		domain,
+		pageHtml: existing.pageHtml ?? null,
+		pageText: existing.pageText ?? null,
+		extensionData: {},
+	});
 
-	let extracted: Record<string, unknown>;
-	try {
-		extracted = await callOllamaJson(prompt);
-	} catch (e) {
-		return c.json({ error: "LLM extraction failed", detail: String(e) }, 500);
-	}
-	extracted.promptUsed = promptTemplate;
+	const version = generateVersion(url);
+	const dataWithVersion = { ...pipelineResult.data, version };
 
 	const committed = db
 		.select()
@@ -399,26 +426,22 @@ app.post("/reextract", async (c) => {
 		.where(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "committed")))
 		.get();
 
-	const domain = new URL(url).hostname;
-	const version = generateVersion(url);
-	const dataWithVersion = { ...extracted, version };
-
 	// Replace any existing pending
-	db.delete(schema.pageSnapshots)
-		.where(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "pending")))
-		.run();
+	deleteSnapshotsWhere(and(eq(schema.pageSnapshots.url, url), eq(schema.pageSnapshots.status, "pending")));
 
 	if (!committed) {
 		// No committed yet — auto-commit
 		const snapshot = db.insert(schema.pageSnapshots)
-			.values({ url, domain, version, data: JSON.stringify(dataWithVersion), pageText: existing.pageText, status: "committed", capturedAt: Date.now(), committedAt: Date.now() })
+			.values({ url, domain, version, data: JSON.stringify(dataWithVersion), pageText: existing.pageText, pageHtml: existing.pageHtml, status: "committed", capturedAt: Date.now(), committedAt: Date.now() })
 			.returning().get();
+		flushPluginLogs(snapshot.id, url, pipelineResult.pluginResults);
 		return c.json({ autoCommitted: true, snapshot });
 	}
 
 	const pending = db.insert(schema.pageSnapshots)
-		.values({ url, domain, version, data: JSON.stringify(dataWithVersion), pageText: existing.pageText, status: "pending", capturedAt: Date.now() })
+		.values({ url, domain, version, data: JSON.stringify(dataWithVersion), pageText: existing.pageText, pageHtml: existing.pageHtml, status: "pending", capturedAt: Date.now() })
 		.returning().get();
+	flushPluginLogs(pending.id, url, pipelineResult.pluginResults);
 
 	return c.json({ pendingId: pending.id, version });
 });
@@ -461,9 +484,7 @@ app.post("/:id/commit", async (c) => {
 	}
 
 	// Remove old committed and other pending for this URL
-	db.delete(schema.pageSnapshots)
-		.where(and(eq(schema.pageSnapshots.url, pending.url), not(eq(schema.pageSnapshots.id, id))))
-		.run();
+	deleteSnapshotsWhere(and(eq(schema.pageSnapshots.url, pending.url), not(eq(schema.pageSnapshots.id, id))));
 
 	// Commit with final data
 	const committed = db
