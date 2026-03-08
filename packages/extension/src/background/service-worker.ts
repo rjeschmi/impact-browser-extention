@@ -12,6 +12,8 @@ interface ActiveTab {
 let activeTab: ActiveTab | null = null;
 let visitQueue: PageVisit[] = [];
 let isPaused = false;
+// Page text captured from content script, keyed by URL
+const pageTextCache = new Map<string, string>();
 
 function extractDomain(url: string): string {
 	try {
@@ -43,12 +45,14 @@ function finalizeActiveTab() {
 
 	// Only record if visited for more than 1 second
 	if (durationMs > 1000) {
+		const pageText = pageTextCache.get(activeTab.url);
 		visitQueue.push({
 			url: activeTab.url,
 			domain: activeTab.domain,
 			title: activeTab.title,
 			visitedAt: activeTab.startTime,
 			durationMs,
+			pageText,
 		});
 	}
 
@@ -219,8 +223,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // Handle extractions from content script
-async function handleExtractions(extractions: Extraction[]) {
+async function handleExtractions(extractions: Extraction[], pageText?: string) {
 	if (isPaused || extractions.length === 0) return;
+	if (pageText && activeTab) {
+		pageTextCache.set(activeTab.url, pageText);
+	}
 	await sendExtractions(extractions);
 	// Refresh badge now that we have new data
 	const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -238,7 +245,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				: null,
 		});
 	} else if (message.type === "EXTRACTIONS") {
-		handleExtractions(message.extractions);
+		handleExtractions(message.extractions, message.pageText);
 		sendResponse({ ok: true });
 	} else if (message.type === "TOGGLE_PAUSE") {
 		isPaused = !isPaused;

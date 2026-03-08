@@ -9,6 +9,7 @@ export const PageVisitSchema = z.object({
 	visitedAt: z.number().int(),
 	durationMs: z.number().int().nonnegative(),
 	referrerUrl: z.string().url().nullable().optional(),
+	pageText: z.string().max(10_000).optional(),
 });
 
 export type PageVisit = z.infer<typeof PageVisitSchema>;

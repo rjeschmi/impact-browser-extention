@@ -80,6 +80,8 @@ db.run(sql`CREATE INDEX IF NOT EXISTS idx_snapshots_url_status ON page_snapshots
 db.run(sql`CREATE INDEX IF NOT EXISTS idx_snapshots_domain ON page_snapshots(domain)`);
 try { db.run(sql`ALTER TABLE page_snapshots ADD COLUMN embedding TEXT`); } catch {}
 try { db.run(sql`ALTER TABLE page_snapshots ADD COLUMN page_text TEXT`); } catch {}
+try { db.run(sql`ALTER TABLE page_visits ADD COLUMN page_text TEXT`); } catch {}
+try { db.run(sql`ALTER TABLE page_visits ADD COLUMN embedding TEXT`); } catch {}
 
 db.run(sql`CREATE TABLE IF NOT EXISTS prompt_configs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

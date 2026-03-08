@@ -15,7 +15,8 @@ function extract() {
 	const extractions = runExtraction();
 	if (extractions.length === 0) return;
 
-	chrome.runtime.sendMessage({ type: "EXTRACTIONS", extractions });
+	const pageText = document.body.innerText.trim().slice(0, 8000);
+	chrome.runtime.sendMessage({ type: "EXTRACTIONS", extractions, pageText });
 
 	const snapshotData = buildSnapshot(extractions);
 	cachedPageText = document.body.innerText.trim().slice(0, 3000);

@@ -10,6 +10,8 @@ export const pageVisits = sqliteTable(
 		visitedAt: integer("visited_at").notNull(),
 		durationMs: integer("duration_ms").notNull().default(0),
 		referrerUrl: text("referrer_url"),
+		pageText: text("page_text"),
+		embedding: text("embedding"), // JSON float array
 	},
 	(table) => [index("idx_visits_domain").on(table.domain)],
 );
