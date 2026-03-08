@@ -1,5 +1,5 @@
 import type { PageVisit, Extraction } from "@impact/shared";
-import { sendVisits, sendExtractions, getSnapshot } from "../lib/api.js";
+import { sendVisits, sendExtractions, getSnapshot, submitSnapshot } from "../lib/api.js";
 
 interface ActiveTab {
 	tabId: number;
@@ -14,6 +14,31 @@ let visitQueue: PageVisit[] = [];
 let isPaused = false;
 // Page text captured from content script, keyed by URL
 const pageTextCache = new Map<string, string>();
+
+// Snapshot job queue
+interface SnapshotJob {
+	url: string;
+	domain: string;
+	snapshotData: Record<string, unknown>;
+	pageText: string;
+	pageHtml?: string;
+}
+let snapshotQueue: SnapshotJob[] = [];
+let snapshotProcessing = false;
+
+async function processSnapshotQueue() {
+	if (snapshotProcessing || snapshotQueue.length === 0) return;
+	snapshotProcessing = true;
+	const job = snapshotQueue.shift()!;
+	try {
+		await submitSnapshot(job.url, job.domain, job.snapshotData, job.pageText, job.pageHtml);
+	} catch (e) {
+		console.error("[snapshot] submission failed:", e);
+	} finally {
+		snapshotProcessing = false;
+		processSnapshotQueue();
+	}
+}
 
 function extractDomain(url: string): string {
 	try {
@@ -243,7 +268,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			activeTab: activeTab
 				? { url: activeTab.url, domain: activeTab.domain }
 				: null,
+			snapshotProcessing,
+			snapshotQueued: snapshotQueue.length,
 		});
+	} else if (message.type === "QUEUE_SNAPSHOT") {
+		const job: SnapshotJob = {
+			url: message.url,
+			domain: message.domain,
+			snapshotData: message.snapshotData,
+			pageText: message.pageText,
+			pageHtml: message.pageHtml,
+		};
+		snapshotQueue.push(job);
+		processSnapshotQueue();
+		sendResponse({ ok: true, queued: snapshotQueue.length });
 	} else if (message.type === "EXTRACTIONS") {
 		handleExtractions(message.extractions, message.pageText);
 		sendResponse({ ok: true });

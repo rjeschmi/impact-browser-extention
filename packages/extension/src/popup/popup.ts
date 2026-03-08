@@ -1,7 +1,9 @@
-import { checkHealth, getBlocklist, toggleBlocklist, getDomainSummary, getExtractionsForUrl, pinExtraction, submitSnapshot } from "../lib/api.js";
+import { checkHealth, getBlocklist, toggleBlocklist, getDomainSummary, getExtractionsForUrl, pinExtraction } from "../lib/api.js";
 
 const statusDot          = document.getElementById("statusDot") as HTMLDivElement;
 const statusLabel        = document.getElementById("statusLabel") as HTMLSpanElement;
+const snapshotStatusRow  = document.getElementById("snapshotStatusRow") as HTMLDivElement;
+const snapshotStatusLabel = document.getElementById("snapshotStatusLabel") as HTMLSpanElement;
 const siteDomain         = document.getElementById("siteDomain") as HTMLDivElement;
 const siteMeta           = document.getElementById("siteMeta") as HTMLDivElement;
 const blockBtn           = document.getElementById("blockBtn") as HTMLButtonElement;
@@ -117,6 +119,16 @@ async function updateStatus() {
 	}
 
 	toggleBtn.textContent = response.isPaused ? "Resume Tracking" : "Pause Tracking";
+
+	// Snapshot processing indicator
+	const snapshotActive = response.snapshotProcessing || response.snapshotQueued > 0;
+	snapshotStatusRow.style.display = snapshotActive ? "flex" : "none";
+	if (snapshotActive) {
+		const total = response.snapshotQueued + (response.snapshotProcessing ? 1 : 0);
+		snapshotStatusLabel.textContent = total > 1
+			? `Processing snapshot… (${total} queued)`
+			: "Processing snapshot…";
+	}
 }
 
 async function updateSiteSection() {
@@ -173,17 +185,34 @@ blockBtn.addEventListener("click", async () => {
 
 showDiffBtn.addEventListener("click", async () => {
 	if (!currentUrl || !currentDomain) return;
-	showDiffBtn.textContent = "Loading…";
-	showDiffBtn.style.opacity = "0.6";
+	showDiffBtn.textContent = "Queuing…";
+	showDiffBtn.disabled = true;
+
 	try {
 		const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-		const response = await chrome.tabs.sendMessage(tab.id!, { type: "GET_SNAPSHOT_DATA" }) as { snapshotData: Record<string, unknown> | null; pageText: string; pageHtml?: string };
-		if (response) {
-			await submitSnapshot(currentUrl, currentDomain, response.snapshotData ?? {}, response.pageText, response.pageHtml);
+		let snapshotData: Record<string, unknown> = {};
+		let pageText = "";
+		let pageHtml: string | undefined;
+		try {
+			const data = await chrome.tabs.sendMessage(tab.id!, { type: "GET_SNAPSHOT_DATA" }) as { snapshotData: Record<string, unknown> | null; pageText: string; pageHtml?: string };
+			snapshotData = data.snapshotData ?? {};
+			pageText = data.pageText;
+			pageHtml = data.pageHtml;
+		} catch {
+			// Content script not ready — queue with empty data
 		}
+		await chrome.runtime.sendMessage({
+			type: "QUEUE_SNAPSHOT",
+			url: currentUrl,
+			domain: currentDomain,
+			snapshotData,
+			pageText,
+			pageHtml,
+		});
 	} catch {
-		// Proceed to dashboard even if content script fails (no snapshot data yet is fine)
+		// If queuing fails, still open dashboard
 	}
+
 	const url = `http://localhost:7890?domain=${encodeURIComponent(currentDomain)}&url=${encodeURIComponent(currentUrl)}&view=diff`;
 	chrome.tabs.create({ url });
 	window.close();

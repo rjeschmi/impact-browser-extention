@@ -42,6 +42,8 @@
     }
     .dot.paused { background: #ff922b; }
     .dot.offline { background: #ff6b6b; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .dot.snapshot { background: #ffd43b; animation: pulse 1.2s ease-in-out infinite; }
     .status-label { font-size: 13px; color: rgba(255,255,255,0.7); }
 
     .site-section {
@@ -164,6 +166,11 @@
       <div class="brand-sub" id="statusLabel">Connecting...</div>
     </div>
     <div class="dot" id="statusDot" style="margin-left:8px"></div>
+  </div>
+
+  <div id="snapshotStatusRow" class="status-row" style="display:none;background:rgba(255,212,59,0.06);border-color:rgba(255,212,59,0.15)">
+    <div class="dot snapshot"></div>
+    <span class="status-label" id="snapshotStatusLabel" style="color:rgba(255,212,59,0.8)">Processing snapshot…</span>
   </div>
 
   <div class="site-section">
