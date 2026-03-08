@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
-import { getVisits, getExtractions, patchExtraction, askSnapshot, getSnapshots } from "../lib/api.js";
+import { getVisits, getExtractions, askSnapshot, getSnapshots } from "../lib/api.js";
 import { formatDuration, relativeTime, getFavicon } from "../lib/format.js";
 import type { StoredExtraction, StoredPageVisit } from "@impact/shared";
 import { SitePublishPanel } from "./SitePublishPanel.js";
@@ -16,25 +16,6 @@ function parseMeta<T>(s?: string | null): T {
 	try { return s ? JSON.parse(s) as T : {} as T; } catch { return {} as T; }
 }
 
-function PinBtn({ e, onToggle }: { e: StoredExtraction; onToggle: (id: number, val: boolean) => void }) {
-	const [busy, setBusy] = useState(false);
-	async function toggle() {
-		setBusy(true);
-		try { await patchExtraction(e.id, { isPinned: !e.isPinned }); onToggle(e.id, !e.isPinned); }
-		finally { setBusy(false); }
-	}
-	return (
-		<button onClick={toggle} disabled={busy} title={e.isPinned ? "Unpin" : "Pin"} style={{
-			background: "none", border: "none", cursor: busy ? "default" : "pointer",
-			fontSize: 14, opacity: e.isPinned ? 1 : 0.25, padding: "0 2px", lineHeight: 1, flexShrink: 0,
-			transition: "opacity 0.15s",
-		}}
-			onMouseEnter={ev => { if (!e.isPinned) (ev.target as HTMLElement).style.opacity = "0.7"; }}
-			onMouseLeave={ev => { if (!e.isPinned) (ev.target as HTMLElement).style.opacity = "0.25"; }}>
-			📌
-		</button>
-	);
-}
 
 interface ChatMessage { role: "user" | "assistant"; content: string }
 
@@ -150,10 +131,6 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 		}).catch(() => {}).finally(() => setLoading(false));
 	}, [domain]);
 
-	const togglePin = useCallback((id: number, isPinned: boolean) => {
-		setExtractions(prev => prev.map(e => e.id === id ? { ...e, isPinned } : e));
-	}, []);
-
 	const dedup = (items: StoredExtraction[]) => {
 		const seen = new Set<string>();
 		return items.filter(e => seen.has(e.value) ? false : (seen.add(e.value), true));
@@ -162,7 +139,6 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 	const prices    = dedup(extractions.filter(e => e.kind === "price"));
 	const deadlines = dedup(extractions.filter(e => e.kind === "deadline"));
 	const keywords  = dedup(extractions.filter(e => e.kind === "keyword"));
-	const pinned    = extractions.filter(e => e.isPinned);
 
 	const totalDuration = visits.reduce((sum, v) => sum + v.durationMs, 0);
 	const lastVisit = visits[0];
@@ -183,19 +159,7 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 						{lastVisit ? ` · last ${relativeTime(lastVisit.visitedAt)}` : ""}
 					</div>
 				</div>
-				{pinned.length > 0 && (
-					<span style={{ fontSize: 12, color: "#ffd43b", background: "rgba(255,212,59,0.12)", padding: "3px 10px", borderRadius: 20 }}>
-						📌 {pinned.length} pinned
-					</span>
-				)}
 			</div>
-
-			{/* Pinned */}
-			{pinned.length > 0 && (
-				<Section title="Pinned">
-					{pinned.map(e => <ExtractionRow key={e.id} e={e} onTogglePin={togglePin} />)}
-				</Section>
-			)}
 
 			{/* Prices */}
 			{prices.length > 0 && (
@@ -204,7 +168,7 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 						{prices.map(e => {
 							const m = parseMeta<PriceMeta>(e.metadata);
 							return (
-								<div key={e.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "rgba(81,207,102,0.06)", borderRadius: 8, border: `1px solid ${e.isPinned ? "rgba(255,212,59,0.4)" : "rgba(81,207,102,0.15)"}` }}>
+								<div key={e.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "rgba(81,207,102,0.06)", borderRadius: 8, border: "1px solid rgba(81,207,102,0.15)" }}>
 									<span style={{ fontSize: 18, fontWeight: 700, color: "#51cf66", flexShrink: 0 }}>
 										{m.currency ?? ""} {m.price != null ? m.price.toLocaleString() : e.value}
 									</span>
@@ -221,7 +185,6 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 											{new URL(e.url).pathname.slice(0, 30) || "/"}
 										</a>
 									)}
-									<PinBtn e={e} onToggle={togglePin} />
 								</div>
 							);
 						})}
@@ -238,7 +201,7 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 							const date = m.iso ? new Date(m.iso) : null;
 							const isPast = date ? date < new Date() : false;
 							return (
-								<div key={e.id} style={{ display: "flex", gap: 14, alignItems: "center", padding: "10px 14px", background: "rgba(255,107,107,0.06)", borderRadius: 8, border: `1px solid ${e.isPinned ? "rgba(255,212,59,0.4)" : isPast ? "rgba(255,107,107,0.3)" : "rgba(255,146,43,0.2)"}` }}>
+								<div key={e.id} style={{ display: "flex", gap: 14, alignItems: "center", padding: "10px 14px", background: "rgba(255,107,107,0.06)", borderRadius: 8, border: `1px solid ${isPast ? "rgba(255,107,107,0.3)" : "rgba(255,146,43,0.2)"}` }}>
 									<div style={{ flexShrink: 0, textAlign: "center", minWidth: 48 }}>
 										{date ? (
 											<>
@@ -252,7 +215,6 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 										{e.context && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.context}</div>}
 										{isPast && <div style={{ fontSize: 10, color: "#ff6b6b", marginTop: 3 }}>Passed</div>}
 									</div>
-									<PinBtn e={e} onToggle={togglePin} />
 								</div>
 							);
 						})}
@@ -265,13 +227,12 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 				<Section title="Page Summaries">
 					<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
 						{keywords.map(e => (
-							<div key={e.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 12px", background: "rgba(255,255,255,0.03)", borderRadius: 7, borderLeft: `3px solid ${e.isPinned ? "#ffd43b" : "rgba(116,192,252,0.3)"}` }}>
+							<div key={e.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 12px", background: "rgba(255,255,255,0.03)", borderRadius: 7, borderLeft: "3px solid rgba(116,192,252,0.3)" }}>
 								<div style={{ flex: 1, minWidth: 0 }}>
 									<div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{e.value}</div>
 									<div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 4 }}>{relativeTime(e.extractedAt)}</div>
 								</div>
 								<a href={`/?view=diff&domain=${encodeURIComponent(domain)}&url=${encodeURIComponent(e.url)}`} title="View snapshot" style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textDecoration: "none", flexShrink: 0, alignSelf: "center", padding: "2px 4px" }}>↗</a>
-								<PinBtn e={e} onToggle={togglePin} />
 							</div>
 						))}
 					</div>
@@ -346,14 +307,3 @@ function Section({ title, children }: { title: string; children: preact.Componen
 	);
 }
 
-function ExtractionRow({ e, onTogglePin }: { e: StoredExtraction; onTogglePin: (id: number, val: boolean) => void }) {
-	const kindColors: Record<string, string> = { price: "#51cf66", deadline: "#ff6b6b", todo: "#ffd43b", keyword: "#74c0fc" };
-	const color = kindColors[e.kind] ?? "rgba(255,255,255,0.4)";
-	return (
-		<div style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-			<span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: `${color}22`, color, flexShrink: 0 }}>{e.kind}</span>
-			<span style={{ fontSize: 13, color: "#e2e8f0", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.value}</span>
-			<PinBtn e={e} onToggle={onTogglePin} />
-		</div>
-	);
-}
