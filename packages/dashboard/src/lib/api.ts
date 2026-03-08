@@ -174,6 +174,11 @@ export async function commitSnapshotById(id: number, data?: Record<string, unkno
 	if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
+export async function discardSnapshot(id: number): Promise<void> {
+	const res = await fetch(`${BACKEND_URL}/api/snapshots/${id}`, { method: "DELETE" });
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
 export async function askSnapshot(url: string, userPrompt: string, history: { role: string; content: string }[] = []) {
 	const res = await fetch(`${BACKEND_URL}/api/snapshots/ask`, {
 		method: "POST",

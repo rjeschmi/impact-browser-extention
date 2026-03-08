@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "preact/hooks";
-import { getSnapshotForUrl, commitSnapshotById, reextractSnapshot, cleanupSnapshot, getSnapshotHtml, getPluginConfigs, createPluginConfig, updatePluginConfig, deletePluginConfig, getPluginLogs } from "../lib/api.js";
+import { getSnapshotForUrl, commitSnapshotById, discardSnapshot, reextractSnapshot, cleanupSnapshot, getSnapshotHtml, getPluginConfigs, createPluginConfig, updatePluginConfig, deletePluginConfig, getPluginLogs } from "../lib/api.js";
 import type { PluginConfig } from "../lib/api.js";
 
 const card = { background: "#1e2d50", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.07)", padding: "18px 20px" };
@@ -107,6 +107,7 @@ export function SnapshotDiff({ url, domain }: { url: string; domain: string }) {
 	const [committing, setCommitting] = useState(false);
 	const [rerunning, setRerunning] = useState(false);
 	const [cleaning, setCleaning] = useState(false);
+	const [discarding, setDiscarding] = useState(false);
 	const [done, setDone] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [rejected, setRejected] = useState<Set<string>>(new Set());
@@ -196,6 +197,20 @@ export function SnapshotDiff({ url, domain }: { url: string; domain: string }) {
 			setError(String(e));
 		} finally {
 			setCleaning(false);
+		}
+	};
+
+	const discard = async () => {
+		if (!pending) return;
+		setDiscarding(true);
+		setError(null);
+		try {
+			await discardSnapshot(pending.id);
+			setPending(null);
+		} catch (e) {
+			setError(String(e));
+		} finally {
+			setDiscarding(false);
 		}
 	};
 
@@ -337,17 +352,31 @@ export function SnapshotDiff({ url, domain }: { url: string; domain: string }) {
 					{done ? (
 						<span style={{ fontSize: 13, color: "#51cf66", fontWeight: 600, alignSelf: "center" }}>✓ Saved</span>
 					) : (
-						<button
-							onClick={() => commit(diffEntries)}
-							disabled={committing || rerunning}
-							style={{
-								background: "#228be6", color: "white", border: "none", borderRadius: 7,
-								padding: "8px 18px", fontSize: 13, fontWeight: 600,
-								cursor: committing || rerunning ? "default" : "pointer",
-								opacity: committing || rerunning ? 0.6 : 1,
-							}}>
-							{committing ? "Saving…" : "Save this version"}
-						</button>
+						<>
+							<button
+								onClick={discard}
+								disabled={discarding || committing || rerunning}
+								style={{
+									background: "rgba(255,107,107,0.08)", color: "#ff8f8f",
+									border: "1px solid rgba(255,107,107,0.25)", borderRadius: 7,
+									padding: "8px 14px", fontSize: 13, fontWeight: 500,
+									cursor: discarding || committing || rerunning ? "default" : "pointer",
+									opacity: discarding || committing || rerunning ? 0.6 : 1,
+								}}>
+								{discarding ? "Discarding…" : "Discard"}
+							</button>
+							<button
+								onClick={() => commit(diffEntries)}
+								disabled={committing || rerunning || discarding}
+								style={{
+									background: "#228be6", color: "white", border: "none", borderRadius: 7,
+									padding: "8px 18px", fontSize: 13, fontWeight: 600,
+									cursor: committing || rerunning || discarding ? "default" : "pointer",
+									opacity: committing || rerunning || discarding ? 0.6 : 1,
+								}}>
+								{committing ? "Saving…" : "Save this version"}
+							</button>
+						</>
 					)}
 				</div>
 			</div>

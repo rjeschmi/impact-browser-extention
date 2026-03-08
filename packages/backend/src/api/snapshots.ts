@@ -591,4 +591,21 @@ app.post("/:id/commit", async (c) => {
 	return c.json(committed);
 });
 
+app.delete("/:id", async (c) => {
+	const id = Number(c.req.param("id"));
+
+	const snapshot = db
+		.select({ id: schema.pageSnapshots.id, status: schema.pageSnapshots.status })
+		.from(schema.pageSnapshots)
+		.where(eq(schema.pageSnapshots.id, id))
+		.get();
+
+	if (!snapshot) return c.json({ error: "Not found" }, 404);
+	if (snapshot.status !== "pending") return c.json({ error: "Only pending snapshots can be discarded" }, 400);
+
+	db.delete(schema.pageSnapshots).where(eq(schema.pageSnapshots.id, id)).run();
+
+	return c.json({ ok: true, deleted: id });
+});
+
 export default app;
