@@ -126,6 +126,17 @@ db.run(sql`CREATE TABLE IF NOT EXISTS app_settings (
   updated_at INTEGER NOT NULL
 )`);
 
+db.run(sql`CREATE TABLE IF NOT EXISTS public_site_labels (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  url_pattern TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL,
+  description TEXT,
+  contributor TEXT NOT NULL DEFAULT 'anonymous',
+  last_pushed_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+)`);
+
 import { eq, and } from "drizzle-orm";
 
 // Sync prompt_configs → plugin_configs (runs every startup to catch any that were missed)

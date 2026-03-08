@@ -6,6 +6,7 @@
     "dev:backend": "bun run --hot packages/backend/src/index.ts",
     "dev:dashboard": "bun run --cwd packages/dashboard dev",
     "dev:extension": "bun run --cwd packages/extension dev",
+    "dev:registry": "bun run --hot packages/registry/src/index.ts",
     "build": "bun run build:shared && bun run build:dashboard && bun run build:extension",
     "build:shared": "bun run --cwd packages/shared build",
     "build:dashboard": "bun run --cwd packages/dashboard build",

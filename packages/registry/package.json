@@ -1,0 +1,13 @@
+{
+  "name": "@impact/registry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.36.0",
+    "hono": "^4.6.0"
+  }
+}

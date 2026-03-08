@@ -33,8 +33,11 @@ export const cheerioPreprocessor: Plugin = {
 		if (!ctx.pageHtml) return;
 
 		const maxChars = (config?.maxChars as number) ?? DEFAULT_MAX_CHARS;
-		const extraStripTags = (config?.stripTags as string[]) ?? [];
-		const contentSelector = config?.contentSelector as string | undefined;
+		const extraStripTagsRaw = config?.stripTags as string | string[] | undefined;
+		const extraStripTags = Array.isArray(extraStripTagsRaw)
+			? extraStripTagsRaw
+			: (extraStripTagsRaw ? extraStripTagsRaw.split(",").map(s => s.trim()) : []);
+		const contentSelector = (config?.contentSelector || config?.selector) as string | undefined;
 		const textOnly = !!(config?.textOnly);
 
 		const $ = load(ctx.pageHtml);

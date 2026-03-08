@@ -428,7 +428,7 @@ function ConfigRow({
 	);
 }
 
-export function PromptConfigManager() {
+export function PromptConfigManager({ initialUrl }: { initialUrl?: string }) {
 	const [configs, setConfigs] = useState<PromptConfig[]>([]);
 	const [defaultPrompt, setDefaultPrompt] = useState("");
 	const [loading, setLoading] = useState(true);
@@ -456,6 +456,17 @@ export function PromptConfigManager() {
 			.catch(() => {})
 			.finally(() => setLoading(false));
 	}, []);
+
+	useEffect(() => {
+		if (!initialUrl) return;
+		try {
+			const u = new URL(initialUrl);
+			setNewPattern(`${u.origin}${u.pathname}*`);
+		} catch {
+			setNewPattern(initialUrl);
+		}
+		setAdding(true);
+	}, [initialUrl]);
 
 	async function handleCreate(e: Event) {
 		e.preventDefault();

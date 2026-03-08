@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { getVisits, getExtractions, patchExtraction, askSnapshot, getSnapshots } from "../lib/api.js";
 import { formatDuration, relativeTime, getFavicon } from "../lib/format.js";
 import type { StoredExtraction, StoredPageVisit } from "@impact/shared";
+import { SitePublishPanel } from "./SitePublishPanel.js";
 
 const card = { background: "#1e2d50", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.07)", padding: "18px 20px" };
 const sectionTitle = { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" as const, marginBottom: 10 };
@@ -329,6 +330,8 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 			)}
 
 			{url && <PageChat url={url} initialPrompt={initialPrompt} />}
+
+		<SitePublishPanel domain={domain} url={url} />
 		</div>
 	);
 }

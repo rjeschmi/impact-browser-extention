@@ -296,3 +296,80 @@ export async function reindexSnapshots(force = false): Promise<{ indexed: number
 	}
 	return res.json();
 }
+
+// Registry types
+export interface RegistryLabel {
+	id: number;
+	urlPattern: string;
+	label: string;
+	description: string | null;
+	contributor: string;
+	lastPushedAt: number | null;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface RegistryEntry {
+	id: number;
+	urlPattern: string;
+	domain: string;
+	label: string;
+	description: string | null;
+	contributor: string;
+	pushedAt: number;
+	pushCount: number;
+	configBundle: string;
+}
+
+// Registry labels (backend)
+export async function getRegistryLabels(): Promise<{ labels: RegistryLabel[] }> {
+	return get("/api/registry/labels");
+}
+
+export async function upsertRegistryLabel(data: {
+	urlPattern: string;
+	label: string;
+	description?: string;
+	contributor?: string;
+}): Promise<RegistryLabel> {
+	const res = await fetch(`${BACKEND_URL}/api/registry/labels`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(data),
+	});
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+	return res.json();
+}
+
+export async function deleteRegistryLabel(id: number): Promise<void> {
+	const res = await fetch(`${BACKEND_URL}/api/registry/labels/${id}`, { method: "DELETE" });
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function pushToRegistry(labelId: number): Promise<{ ok: boolean; entry: unknown }> {
+	const res = await fetch(`${BACKEND_URL}/api/registry/labels/${labelId}/push`, { method: "POST" });
+	if (!res.ok) {
+		const data = await res.json() as { error?: string };
+		throw new Error(data.error ?? `HTTP ${res.status}`);
+	}
+	return res.json();
+}
+
+export async function browseRegistry(q?: string): Promise<{ entries: RegistryEntry[] }> {
+	const params: Record<string, string> = {};
+	if (q) params.q = q;
+	return get("/api/registry/browse", params);
+}
+
+export async function importFromRegistry(entryId: number): Promise<{ ok: boolean; imported: { promptConfigs: number; pluginConfigs: number } }> {
+	const res = await fetch(`${BACKEND_URL}/api/registry/import`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ entryId }),
+	});
+	if (!res.ok) {
+		const data = await res.json() as { error?: string };
+		throw new Error(data.error ?? `HTTP ${res.status}`);
+	}
+	return res.json();
+}

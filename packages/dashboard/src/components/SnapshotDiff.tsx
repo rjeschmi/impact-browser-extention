@@ -402,8 +402,23 @@ export function SnapshotDiff({ url, domain }: { url: string; domain: string }) {
 function Header({ url, domain, title }: { url: string; domain: string; title: string }) {
 	return (
 		<div style={{ ...card, padding: "14px 20px" }}>
-			<div style={{ fontSize: 17, fontWeight: 700, color: "white", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</div>
-			<a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#74c0fc", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{url}</a>
+			<div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+				<div style={{ minWidth: 0, flex: 1 }}>
+					<div style={{ fontSize: 17, fontWeight: 700, color: "white", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</div>
+					<a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#74c0fc", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{url}</a>
+				</div>
+				<a
+					href={`/?tab=settings&url=${encodeURIComponent(url)}`}
+					style={{
+						flexShrink: 0, fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.4)",
+						textDecoration: "none", padding: "4px 10px", borderRadius: 5,
+						border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)",
+						whiteSpace: "nowrap",
+					}}
+				>
+					⚙ Prompt settings
+				</a>
+			</div>
 		</div>
 	);
 }

@@ -9,6 +9,7 @@ import {
 	getExportUrl,
 } from "../lib/api.js";
 import { PromptConfigManager } from "./PromptConfigManager.js";
+import { RegistryBrowser } from "./RegistryBrowser.js";
 
 type Stats = {
 	visits: number;
@@ -45,7 +46,7 @@ const label = {
 	marginBottom: 10,
 };
 
-export function Settings() {
+export function Settings({ initialUrl }: { initialUrl?: string }) {
 	const [stats, setStats] = useState<Stats | null>(null);
 	const [blocklist, setBlocklist] = useState<string[]>([]);
 	const [newDomain, setNewDomain] = useState("");
@@ -121,6 +122,15 @@ export function Settings() {
 
 	return (
 		<div>
+			{/* Registry */}
+			<div style={card}>
+				<span style={label}>Config Registry</span>
+				<p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 12 }}>
+					Browse and import shared extraction configs from the community registry.
+				</p>
+				<RegistryBrowser />
+			</div>
+
 			{/* Stats */}
 			<div style={card}>
 				<span style={label}>Database</span>
@@ -320,7 +330,7 @@ export function Settings() {
 			{/* Extraction Prompts */}
 			<div style={card}>
 				<span style={label}>Extraction Prompts</span>
-				<PromptConfigManager />
+				<PromptConfigManager initialUrl={initialUrl} />
 			</div>
 
 			{/* Export */}

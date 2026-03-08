@@ -50,6 +50,14 @@
         "vite": "^5.4.0",
       },
     },
+    "packages/registry": {
+      "name": "@impact/registry",
+      "version": "0.1.0",
+      "dependencies": {
+        "drizzle-orm": "^0.36.0",
+        "hono": "^4.6.0",
+      },
+    },
     "packages/shared": {
       "name": "@impact/shared",
       "version": "0.1.0",
@@ -160,6 +168,8 @@
     "@impact/dashboard": ["@impact/dashboard@workspace:packages/dashboard"],
 
     "@impact/extension": ["@impact/extension@workspace:packages/extension"],
+
+    "@impact/registry": ["@impact/registry@workspace:packages/registry"],
 
     "@impact/shared": ["@impact/shared@workspace:packages/shared"],
 

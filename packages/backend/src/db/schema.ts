@@ -139,3 +139,17 @@ export const appSettings = sqliteTable(
 		updatedAt: integer("updated_at").notNull(),
 	}
 );
+
+export const publicSiteLabels = sqliteTable(
+	"public_site_labels",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		urlPattern: text("url_pattern").notNull().unique(),
+		label: text("label").notNull(),
+		description: text("description"),
+		contributor: text("contributor").notNull().default("anonymous"),
+		lastPushedAt: integer("last_pushed_at"),
+		createdAt: integer("created_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+);

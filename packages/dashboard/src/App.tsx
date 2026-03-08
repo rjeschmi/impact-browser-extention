@@ -36,8 +36,9 @@ function ImpactLogo({ size = 28 }: { size?: number }) {
 }
 
 export function App() {
-	const [tab, setTab] = useState<Tab>("activity");
 	const params = new URLSearchParams(location.search);
+	const initialTab = params.get("tab") as Tab | null;
+	const [tab, setTab] = useState<Tab>((initialTab && TABS.some(t => t.id === initialTab)) ? initialTab : "activity");
 	const siteDomain = params.get("domain");
 	const siteUrl = params.get("url") ?? undefined;
 	const sitePrompt = params.get("prompt") ?? undefined;
@@ -115,7 +116,7 @@ export function App() {
 						{tab === "stats"       && <DomainStats />}
 						{tab === "suggestions" && <SuggestionList />}
 						{tab === "reminders"   && <ReminderManager />}
-						{tab === "settings"    && <Settings />}
+						{tab === "settings"    && <Settings initialUrl={siteUrl} />}
 						{tab === "search"      && <SemanticSearch />}
 					</>
 				)}
