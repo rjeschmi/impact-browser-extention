@@ -11,10 +11,14 @@ const RSS_TYPES = new Set([
 // Href patterns that suggest a feed link even without a type attribute
 const FEED_HREF_RE = /\/(feed|rss|atom)(\.xml)?(\?|$)|\.rss(\?|$)/i;
 
-interface FeedLink {
-	url: string;
-	title: string | null;
-	type: string | null;
+// FNV-1a 32-bit hash → stable 8-char hex key from a URL
+function urlHash(s: string): string {
+	let h = 0x811c9dc5;
+	for (let i = 0; i < s.length; i++) {
+		h ^= s.charCodeAt(i);
+		h = (Math.imul(h, 0x01000193) >>> 0);
+	}
+	return h.toString(16).padStart(8, "0");
 }
 
 export const rssExtractor: Plugin = {
@@ -29,12 +33,10 @@ export const rssExtractor: Plugin = {
 		if (!ctx.pageHtml) return;
 
 		const $ = load(ctx.pageHtml);
-		const feeds: FeedLink[] = [];
 		const seen = new Set<string>();
 
 		function addFeed(href: string | undefined, title: string | null, type: string | null) {
 			if (!href) return;
-			// Resolve relative URLs
 			let url: string;
 			try {
 				url = new URL(href, ctx.url).href;
@@ -43,7 +45,8 @@ export const rssExtractor: Plugin = {
 			}
 			if (seen.has(url)) return;
 			seen.add(url);
-			feeds.push({ url, title: title || null, type: type || null });
+			const key = `feed_${urlHash(url)}`;
+			state.data[key] = { url, title: title || null, type: type || null };
 		}
 
 		// 1. <link rel="alternate"> in <head> — the canonical way to declare feeds
@@ -65,9 +68,5 @@ export const rssExtractor: Plugin = {
 				addFeed(href, title, null);
 			}
 		});
-
-		if (feeds.length > 0) {
-			state.data.feeds = feeds;
-		}
 	},
 };
