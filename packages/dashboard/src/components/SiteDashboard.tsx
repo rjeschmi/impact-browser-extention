@@ -270,6 +270,7 @@ export function SiteDashboard({ domain, url, initialPrompt }: { domain: string; 
 									<div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{e.value}</div>
 									<div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 4 }}>{relativeTime(e.extractedAt)}</div>
 								</div>
+								<a href={`/?view=diff&domain=${encodeURIComponent(domain)}&url=${encodeURIComponent(e.url)}`} title="View snapshot" style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textDecoration: "none", flexShrink: 0, alignSelf: "center", padding: "2px 4px" }}>↗</a>
 								<PinBtn e={e} onToggle={togglePin} />
 							</div>
 						))}

@@ -14,6 +14,28 @@ const KIND = {
 const card = { background: "#1e2d50", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.07)" };
 const input = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", color: "#e2e8f0", fontSize: 14, padding: "8px 12px", outline: "none" };
 
+interface DomainGroup {
+	domain: string;
+	visits: StoredPageVisit[];        // sorted newest first
+	totalDurationMs: number;
+	mostRecentVisit: StoredPageVisit; // visits[0]
+}
+
+function groupByDomain(visits: StoredPageVisit[]): DomainGroup[] {
+	const map = new Map<string, StoredPageVisit[]>();
+	for (const v of visits) {
+		const existing = map.get(v.domain);
+		if (existing) existing.push(v);
+		else map.set(v.domain, [v]);
+	}
+	return Array.from(map.entries()).map(([domain, vs]) => ({
+		domain,
+		visits: vs, // already sorted newest-first from API
+		totalDurationMs: vs.reduce((sum, v) => sum + v.durationMs, 0),
+		mostRecentVisit: vs[0],
+	}));
+}
+
 export function ActivityFeed() {
 	const [visits, setVisits] = useState<StoredPageVisit[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -33,9 +55,11 @@ export function ActivityFeed() {
 		finally { setLoading(false); }
 	}
 
-	const filtered = filter
+	const filteredVisits = filter
 		? visits.filter(v => v.domain.includes(filter) || v.title.toLowerCase().includes(filter.toLowerCase()))
 		: visits;
+
+	const groups = groupByDomain(filteredVisits);
 
 	return (
 		<div>
@@ -52,14 +76,56 @@ export function ActivityFeed() {
 				</button>
 			</div>
 			{loading && <p style={{ color: "rgba(255,255,255,0.35)" }}>Loading...</p>}
-			{!loading && filtered.length === 0 && (
+			{!loading && groups.length === 0 && (
 				<p style={{ color: "rgba(255,255,255,0.35)" }}>
 					{visits.length === 0 ? "No visits tracked yet. Browse around and come back!" : "No visits match that filter."}
 				</p>
 			)}
 			<div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-				{filtered.map(v => <VisitRow key={v.id} visit={v} />)}
+				{groups.map(g => <DomainRow key={g.domain} group={g} />)}
 			</div>
+		</div>
+	);
+}
+
+function DomainRow({ group }: { group: DomainGroup }) {
+	const [expanded, setExpanded] = useState(false);
+	const { domain, visits, totalDurationMs, mostRecentVisit } = group;
+
+	return (
+		<div style={{ ...card, overflow: "hidden" }}>
+			{/* Domain summary row */}
+			<div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", cursor: "pointer" }} onClick={() => setExpanded(e => !e)}>
+				<img src={getFavicon(domain)} width={15} height={15} style={{ flexShrink: 0, opacity: 0.7 }}
+					onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+				<div style={{ flex: 1, minWidth: 0 }}>
+					<div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+						{domain}
+					</div>
+					<div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>
+						{visits.length} visit{visits.length !== 1 ? "s" : ""} · last {relativeTime(mostRecentVisit.visitedAt)}
+					</div>
+				</div>
+				<div style={{ textAlign: "right", flexShrink: 0 }}>
+					<div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>{formatDuration(totalDurationMs)}</div>
+				</div>
+				<a
+					href={`/?domain=${encodeURIComponent(domain)}`}
+					onClick={e => e.stopPropagation()}
+					title="View site dashboard"
+					style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", textDecoration: "none", flexShrink: 0, padding: "2px 4px" }}
+				>
+					↗
+				</a>
+				<span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>{expanded ? "▲" : "▼"}</span>
+			</div>
+
+			{/* Expanded: individual visits */}
+			{expanded && (
+				<div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.15)" }}>
+					{visits.map(v => <VisitRow key={v.id} visit={v} />)}
+				</div>
+			)}
 		</div>
 	);
 }
@@ -83,37 +149,34 @@ function VisitRow({ visit }: { visit: StoredPageVisit }) {
 	}
 
 	return (
-		<div style={{ ...card, overflow: "hidden" }}>
-			<div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", cursor: "pointer" }} onClick={toggle}>
-				<img src={getFavicon(visit.domain)} width={15} height={15} style={{ flexShrink: 0, opacity: 0.7 }}
-					onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+		<div style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+			<div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px 8px 36px", cursor: "pointer" }} onClick={toggle}>
 				<div style={{ flex: 1, minWidth: 0 }}>
 					<a href={visit.url} target="_blank" rel="noopener noreferrer"
 						onClick={e => e.stopPropagation()}
-						style={{ color: "#74c0fc", textDecoration: "none", fontSize: 13, fontWeight: 500 }}
+						style={{ color: "#74c0fc", textDecoration: "none", fontSize: 12 }}
 						title={visit.url}>
 						<span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
 							{visit.title || visit.url}
 						</span>
 					</a>
-					<span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{visit.domain}</span>
 				</div>
 				<div style={{ textAlign: "right", flexShrink: 0 }}>
-					<div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>{formatDuration(visit.durationMs)}</div>
-					<div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{relativeTime(visit.visitedAt)}</div>
+					<span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{formatDuration(visit.durationMs)}</span>
+					<span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginLeft: 8 }}>{relativeTime(visit.visitedAt)}</span>
 				</div>
-				<span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginLeft: 4 }}>{expanded ? "▲" : "▼"}</span>
+				<a
+					href={`/?view=diff&domain=${encodeURIComponent(visit.domain)}&url=${encodeURIComponent(visit.url)}`}
+					onClick={e => e.stopPropagation()}
+					title="View snapshot"
+					style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textDecoration: "none", flexShrink: 0, padding: "2px 4px" }}
+				>
+					↗
+				</a>
+				<span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)" }}>{expanded ? "▲" : "▼"}</span>
 			</div>
 			{expanded && (
-				<div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "10px 14px", background: "rgba(0,0,0,0.15)" }}>
-					<div style={{ marginBottom: 8 }}>
-						<a
-							href={`/?view=diff&domain=${encodeURIComponent(visit.domain)}&url=${encodeURIComponent(visit.url)}`}
-							style={{ fontSize: 11, color: "#74c0fc", textDecoration: "none", fontWeight: 600 }}
-						>
-							↗ View snapshot
-						</a>
-					</div>
+				<div style={{ padding: "6px 14px 10px 36px", background: "rgba(0,0,0,0.1)" }}>
 					{loadingEx && <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: 0 }}>Loading...</p>}
 					{!loadingEx && extractions?.length === 0 && (
 						<p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", margin: 0 }}>No content extracted from this page.</p>
